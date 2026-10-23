@@ -35,15 +35,20 @@ final class HomeData {
     private static final String CURRENCY = Config.CURRENCY.trim().toUpperCase(Locale.ROOT);
     /** Binance quotes dollars as USDT. */
     private static final String QUOTE = CURRENCY.equals("USD") ? "USDT" : CURRENCY;
-    private static final String WEATHER_QUERY = "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset"
-            + "&hourly=temperature_2m,weather_code,is_day&timezone=auto&forecast_days=2";
+    /** api.open-meteo.com is not reachable from this network; MET Norway (api.met.no) is, and needs no key. */
+    private static final String USER_AGENT = "FreeMyTV/1.0 github.com/simbasjungles/free-my-tv";
 
     private static String weatherPlace() {
         return Prefs.latitude() + "," + Prefs.longitude();
     }
 
     private static String weatherUrl() {
-        return "https://api.open-meteo.com/v1/forecast?latitude=" + Prefs.latitude() + "&longitude=" + Prefs.longitude() + WEATHER_QUERY;
+        String lat = Prefs.latitude(), lon = Prefs.longitude();
+        try {
+            lat = String.format(Locale.US, "%.4f", Double.parseDouble(lat));
+            lon = String.format(Locale.US, "%.4f", Double.parseDouble(lon));
+        } catch (NumberFormatException ignored) {}
+        return "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=" + lat + "&lon=" + lon;
     }
     private static final long PRICES_EVERY = 5 * 60_000L, WEATHER_EVERY = 30 * 60_000L;
     interface Listener { void onData(); }
@@ -98,6 +103,20 @@ final class HomeData {
         final List<Double> hourTemp = new ArrayList<>();
         final List<Integer> hourCode = new ArrayList<>();
         final List<Boolean> hourDay = new ArrayList<>();
+        // The next two days (tomorrow, the day after): midnight (epoch ms), highest and lowest temperature, code.
+        final long[] dayAt = new long[2];
+        final double[] dayMax = {Double.NaN, Double.NaN}, dayMin = {Double.NaN, Double.NaN};
+        final int[] dayCode = {-1, -1};
+        // Today and the next five days, for the drawer: midnight, highest and lowest temperature, and code.
+        // From Yandex: the daytime temperature of today, wind (m/s, direction) and pressure (mm Hg).
+        String nowcast = "";   // "in the next 2 hours ..." when Yandex expects precipitation, else empty
+        double dayTemp = Double.NaN, windSpeed = Double.NaN;
+        String windDir = "";
+        int pressure = -1;
+        final long[] fcAt = new long[6];
+        final double[] fcMax = new double[6], fcMin = new double[6];
+        final int[] fcCode = new int[6];
+        { java.util.Arrays.fill(fcMax, Double.NaN); java.util.Arrays.fill(fcMin, Double.NaN); java.util.Arrays.fill(fcCode, -1); }
     }
 
     private static HomeData instance;
@@ -120,7 +139,10 @@ final class HomeData {
     private volatile boolean fetchingPrices, fetchingWeather;
     private volatile long pricesFailedAt, weatherFailedAt;
 
+    private static Context appCtx;
+
     private HomeData(Context c) {
+        appCtx = c.getApplicationContext();
         cache = c.getSharedPreferences("homedata", Context.MODE_PRIVATE);
         try {
             if (Prefs.quotes()) {
@@ -128,11 +150,22 @@ final class HomeData {
                 if (p != null) parsePrices(p);
                 pricesAt = cache.getLong("pricesAt", 0);
             }
-            String w = cache.getString("weather", null);
+            String w = cache.getString("weather6", null);
             // The cached forecast is for the city it was fetched for; another city means fetch again.
             if (w != null && weatherPlace().equals(cache.getString("weatherPlace", ""))) {
                 weather = parseWeather(w);
                 weatherAt = cache.getLong("weatherAt", 0);
+                if (System.currentTimeMillis() - cache.getLong("yaAt", 0) < 3 * 3_600_000L && cache.contains("yaCode")) {
+                    weather.temp = cache.getFloat("yaTemp", (float) weather.temp);
+                    weather.code = cache.getInt("yaCode", weather.code);
+                    weather.isDay = cache.getBoolean("yaDay", weather.isDay);
+                    try { applyCachedDays(weather); } catch (RuntimeException ignored) {}
+                    weather.dayTemp = cache.getFloat("yaDayTemp", Float.NaN);
+                    weather.windSpeed = cache.getFloat("yaWind", Float.NaN);
+                    weather.windDir = cache.getString("yaWindDir", "");
+                    weather.pressure = cache.getInt("yaPressure", -1);
+                    weather.nowcast = cache.getString("yaNow", "");
+                }
             }
         } catch (Exception ignored) {}
     }
@@ -166,9 +199,15 @@ final class HomeData {
             io.execute(() -> {
                 try {
                     String body = get(weatherUrl());
-                    weather = parseWeather(body);
+                    Weather fresh = parseWeather(body);
+                    if (Prefs.yandexWeather()) try {
+                        applyYandex(fresh, getPage(yandexUrl()));   // what is outside now, as Yandex Weather reports it
+                    } catch (Exception e) {
+                        AppLog.w("yandex weather: " + e.getMessage());   // keep the other source's numbers
+                    }
+                    weather = fresh;
                     weatherAt = System.currentTimeMillis();
-                    cache.edit().putString("weather", body).putLong("weatherAt", weatherAt).putString("weatherPlace", weatherPlace()).apply();
+                    cache.edit().putString("weather6", body).putLong("weatherAt", weatherAt).putString("weatherPlace", weatherPlace()).apply();
                     notifyListeners();
                 } catch (Exception e) {
                     weatherFailedAt = System.currentTimeMillis();
@@ -208,35 +247,158 @@ final class HomeData {
     }
 
     private static Weather parseWeather(String body) throws Exception {
-        JSONObject o = new JSONObject(body);
-        TimeZone zone = TimeZone.getTimeZone(o.optString("timezone", TimeZone.getDefault().getID()));
+        JSONArray series = new JSONObject(body).getJSONObject("properties").getJSONArray("timeseries");
+        TimeZone zone = TimeZone.getDefault();
+        SimpleDateFormat utc = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        utc.setTimeZone(TimeZone.getTimeZone("UTC"));
+        long now = System.currentTimeMillis();
         Weather w = new Weather();
-        JSONObject current = o.getJSONObject("current");
-        w.temp = current.getDouble("temperature_2m");
-        w.code = current.getInt("weather_code");
-        w.isDay = current.optInt("is_day", 1) == 1;
-        JSONObject daily = o.getJSONObject("daily");
-        w.max = daily.getJSONArray("temperature_2m_max").getDouble(0);
-        w.min = daily.getJSONArray("temperature_2m_min").getDouble(0);
-        w.sunrise = localTime(daily.getJSONArray("sunrise").getString(0), zone);
-        w.sunset = localTime(daily.getJSONArray("sunset").getString(0), zone);
-        JSONObject hourly = o.optJSONObject("hourly");
-        if (hourly != null) {
-            JSONArray times = hourly.getJSONArray("time");
-            JSONArray temps = hourly.getJSONArray("temperature_2m");
-            JSONArray codes = hourly.getJSONArray("weather_code");
-            JSONArray days = hourly.optJSONArray("is_day");
-            long now = System.currentTimeMillis();
-            for (int i = 0; i < times.length() && w.hours.size() < 6; i++) {
-                long at = localTime(times.getString(i), zone);
-                if (at <= now) continue;
+        long[] sun = sunTimes(Double.parseDouble(Prefs.latitude()), Double.parseDouble(Prefs.longitude()), now, zone);
+        w.sunrise = sun[0];
+        w.sunset = sun[1];
+        long today = midnight(now, zone);
+        double[] max = new double[6], min = new double[6];
+        java.util.Arrays.fill(max, Double.NaN);
+        java.util.Arrays.fill(min, Double.NaN);
+        long[] noonGap = new long[6];
+        java.util.Arrays.fill(noonGap, Long.MAX_VALUE);
+        int[] noonCode = new int[6];
+        java.util.Arrays.fill(noonCode, -1);
+        long curAt = Long.MIN_VALUE;
+        for (int i = 0; i < series.length(); i++) {
+            JSONObject e = series.getJSONObject(i);
+            long at = utc.parse(e.getString("time")).getTime();
+            JSONObject data = e.getJSONObject("data");
+            double temp = data.getJSONObject("instant").getJSONObject("details").getDouble("air_temperature");
+            String symbol = symbol(data, "next_1_hours", "next_6_hours", "next_12_hours");
+            int code = symbol == null ? -1 : wmo(symbol);
+            boolean day = symbol == null ? isDayAt(at, w, zone) : symbol.endsWith("_night") ? false : symbol.endsWith("_day") ? true : isDayAt(at, w, zone);
+            if (at <= now && at > curAt) {
+                curAt = at;
+                w.temp = temp;
+                w.code = code;
+                w.isDay = day;
+            }
+            if (at > now && w.hours.size() < 6) {
                 w.hours.add(at);
-                w.hourTemp.add(temps.getDouble(i));
-                w.hourCode.add(codes.getInt(i));
-                w.hourDay.add(days == null || days.optInt(i, 1) == 1);
+                w.hourTemp.add(temp);
+                w.hourCode.add(code);
+                w.hourDay.add(day);
+            }
+            int d = (int) Math.round((midnight(at, zone) - today) / 86_400_000.0);
+            if (d < 0 || d > 5) continue;
+            if (Double.isNaN(max[d]) || temp > max[d]) max[d] = temp;
+            if (Double.isNaN(min[d]) || temp < min[d]) min[d] = temp;
+            long gap = Math.abs(at - (midnight(at, zone) + 13 * 3_600_000L));
+            String block = symbol(data, "next_6_hours", "next_12_hours", "next_1_hours");
+            if (block != null && gap < noonGap[d]) {
+                noonGap[d] = gap;
+                noonCode[d] = wmo(block);
             }
         }
+        if (Double.isNaN(w.temp) && series.length() > 0) {   // every entry is in the future: take the first
+            JSONObject data = series.getJSONObject(0).getJSONObject("data");
+            w.temp = data.getJSONObject("instant").getJSONObject("details").getDouble("air_temperature");
+            String symbol = symbol(data, "next_1_hours", "next_6_hours", "next_12_hours");
+            w.code = symbol == null ? -1 : wmo(symbol);
+        }
+        w.max = max[0];
+        w.min = min[0];
+        for (int d = 0; d < 6; d++) {
+            w.fcAt[d] = today + d * 86_400_000L;
+            w.fcMax[d] = max[d];
+            w.fcMin[d] = min[d];
+            w.fcCode[d] = noonCode[d];
+        }
+        for (int d = 1; d <= 2; d++) {
+            w.dayAt[d - 1] = today + d * 86_400_000L;
+            w.dayMax[d - 1] = max[d];
+            w.dayMin[d - 1] = min[d];
+            w.dayCode[d - 1] = noonCode[d];
+        }
         return w;
+    }
+
+    private static String symbol(JSONObject data, String... periods) {
+        for (String p : periods) {
+            JSONObject o = data.optJSONObject(p);
+            if (o == null) continue;
+            JSONObject s = o.optJSONObject("summary");
+            if (s != null && s.has("symbol_code")) return s.optString("symbol_code");
+        }
+        return null;
+    }
+
+    /** MET Norway's symbol_code ("lightrain_day", "partlycloudy_night", "heavysnowshowersandthunder") as a WMO code. */
+    private static int wmo(String symbol) {
+        int u = symbol.indexOf('_');
+        String base = u < 0 ? symbol : symbol.substring(0, u);
+        if (base.contains("thunder")) return 95;
+        boolean showers = base.contains("showers");
+        switch (base.replace("showers", "")) {
+            case "clearsky": return 0;
+            case "fair": return 1;
+            case "partlycloudy": return 2;
+            case "cloudy": return 3;
+            case "fog": return 45;
+            case "lightrain": return showers ? 80 : 61;
+            case "rain": return showers ? 81 : 63;
+            case "heavyrain": return showers ? 82 : 65;
+            case "lightsleet": case "sleet": case "heavysleet": return 71;
+            case "lightsnow": return showers ? 85 : 71;
+            case "snow": return showers ? 85 : 73;
+            case "heavysnow": return showers ? 86 : 75;
+            default: return 3;
+        }
+    }
+
+    private static long midnight(long t, TimeZone zone) {
+        java.util.Calendar c = java.util.Calendar.getInstance(zone);
+        c.setTimeInMillis(t);
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        c.set(java.util.Calendar.MINUTE, 0);
+        c.set(java.util.Calendar.SECOND, 0);
+        c.set(java.util.Calendar.MILLISECOND, 0);
+        return c.getTimeInMillis();
+    }
+
+    /** Is it daylight at `at`, by today's sunrise and sunset (time of day only)? */
+    private static boolean isDayAt(long at, Weather w, TimeZone zone) {
+        if (w.sunrise == 0 || w.sunset == 0) return true;
+        long t = at - midnight(at, zone);
+        return t >= w.sunrise - midnight(w.sunrise, zone) && t < w.sunset - midnight(w.sunset, zone);
+    }
+
+    /** Sunrise and sunset (epoch ms) for the local day of `now`, by the sunrise equation; 0 when the sun doesn't rise or set. */
+    private static long[] sunTimes(double lat, double lon, long now, TimeZone zone) {
+        java.util.Calendar c = java.util.Calendar.getInstance(zone);
+        c.setTimeInMillis(now);
+        int n = c.get(java.util.Calendar.DAY_OF_YEAR);
+        java.util.Calendar u = java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        u.clear();
+        u.set(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH));
+        long base = u.getTimeInMillis();
+        return new long[] {sunEvent(lat, lon, n, true, base), sunEvent(lat, lon, n, false, base)};
+    }
+
+    private static double mod(double v, double m) {
+        return ((v % m) + m) % m;
+    }
+
+    private static long sunEvent(double lat, double lon, int n, boolean rise, long base) {
+        double lngHour = lon / 15, t = n + ((rise ? 6 : 18) - lngHour) / 24;
+        double m = 0.9856 * t - 3.289;
+        double l = mod(m + 1.916 * Math.sin(Math.toRadians(m)) + 0.020 * Math.sin(Math.toRadians(2 * m)) + 282.634, 360);
+        double ra = mod(Math.toDegrees(Math.atan(0.91764 * Math.tan(Math.toRadians(l)))), 360);
+        ra += Math.floor(l / 90) * 90 - Math.floor(ra / 90) * 90;
+        ra /= 15;
+        double sinDec = 0.39782 * Math.sin(Math.toRadians(l)), cosDec = Math.cos(Math.asin(sinDec));
+        double cosH = (Math.cos(Math.toRadians(90.833)) - sinDec * Math.sin(Math.toRadians(lat))) / (cosDec * Math.cos(Math.toRadians(lat)));
+        if (cosH > 1 || cosH < -1) return 0;
+        double h = Math.toDegrees(Math.acos(cosH));
+        h = (rise ? 360 - h : h) / 15;
+        double ut = mod(h + ra - 0.06571 * t - 6.622 - lngHour, 24);
+        return base + Math.round(ut * 3_600_000L);
     }
 
     private static long localTime(String iso, TimeZone zone) throws ParseException {
@@ -266,11 +428,236 @@ final class HomeData {
         return out;
     }
 
+    // MARK: - Yandex Weather's public page (current conditions only; the forecast stays with the first source)
+
+    private static final String BROWSER_UA = "Mozilla/5.0 (Linux; Android 10; Mediaroom) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+    private static String yandexUrl() {
+        String lat = Prefs.latitude(), lon = Prefs.longitude();
+        try {
+            lat = String.format(Locale.US, "%.4f", Double.parseDouble(lat));
+            lon = String.format(Locale.US, "%.4f", Double.parseDouble(lon));
+        } catch (NumberFormatException ignored) {}
+        return "https://yandex.ru/pogoda/?lat=" + lat + "&lon=" + lon;
+    }
+
+    /** The page as a browser would get it (about 1.3 MB, compressed in transit). */
+    private static String getPage(String url) throws IOException {
+        HttpURLConnection c = open(url);
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(12000);
+        c.setRequestProperty("User-Agent", BROWSER_UA);
+        c.setRequestProperty("Accept-Language", "ru-RU,ru;q=0.9");
+        try {
+            if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
+            try (InputStream in = c.getInputStream()) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream(1 << 21);
+                byte[] buffer = new byte[16384];
+                int n;
+                while ((n = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, n);
+                    if (out.size() > 6 << 20) throw new IOException("page too large");
+                }
+                return out.toString(StandardCharsets.UTF_8.name());
+            }
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    /** Takes the temperature, sky and day/night from the "fact" block of the page. Throws if the page has changed shape. */
+    private void applyYandex(Weather w, String page) throws IOException {
+        int at = page.indexOf("fact\\\":{\\\"temperature\\\"");
+        if (at < 0) throw new IOException(page.contains("captcha") ? "captcha" : "no fact block on the page");
+        String f = page.substring(at, Math.min(page.length(), at + 2500)).replace("\\\"", "\"");
+        java.util.regex.Matcher t = java.util.regex.Pattern.compile("\"temperatureInCelsius\":(-?\\d+)").matcher(f);
+        java.util.regex.Matcher cond = java.util.regex.Pattern.compile("\"condition\":\"([A-Z_]+)\"").matcher(f);
+        if (!t.find() || !cond.find()) throw new IOException("the fact block is incomplete");
+        java.util.regex.Matcher icon = java.util.regex.Pattern.compile("\"icon\":\"([a-z0-9_+]+)\"").matcher(f);
+        java.util.regex.Matcher phen = java.util.regex.Pattern.compile("\"phenomCondition\":\"([A-Z_]+)\"").matcher(f);
+        String iconName = icon.find() ? icon.group(1) : "";
+        int code = yandexCode(cond.group(1), phen.find() ? phen.group(1) : "");
+        boolean day = iconName.endsWith("_n") ? false : iconName.endsWith("_d") ? true : isDayAt(System.currentTimeMillis(), w, TimeZone.getDefault());
+        w.temp = Integer.parseInt(t.group(1));
+        w.code = code;
+        w.isDay = day;
+        java.util.regex.Matcher ws = java.util.regex.Pattern.compile("\"windSpeedInMetersPerSecond\":([0-9.]+)").matcher(f);
+        java.util.regex.Matcher wd = java.util.regex.Pattern.compile("\"windDirection\":\"([A-Z_]+)\"").matcher(f);
+        java.util.regex.Matcher pr = java.util.regex.Pattern.compile("\"pressure\":(\\d+)").matcher(f);
+        if (ws.find()) w.windSpeed = Double.parseDouble(ws.group(1));
+        if (wd.find()) w.windDir = wd.group(1);
+        if (pr.find()) w.pressure = Integer.parseInt(pr.group(1));
+        // The sentence about the next two hours, from the page's text ("В ближайшие 2 часа осадков не ожидается."): kept only
+        // when it says something is expected.
+        java.util.regex.Matcher nc = java.util.regex.Pattern.compile("В ближайш[^.<]{0,140}\\.").matcher(page);
+        w.nowcast = "";
+        if (nc.find()) {
+            String sentence = nc.group().replace("⁠", "").replace("‌", "").trim();
+            if (!sentence.contains("не ожидается") && !sentence.contains("без осадков")) w.nowcast = sentence;
+        }
+        cache.edit().putString("yaNow", w.nowcast).putFloat("yaTemp", (float) w.temp).putInt("yaCode", code).putBoolean("yaDay", day)
+                .putFloat("yaWind", (float) w.windSpeed).putString("yaWindDir", w.windDir).putInt("yaPressure", w.pressure)
+                .putLong("yaAt", System.currentTimeMillis()).apply();
+        try {
+            yandexDays(w, page);
+        } catch (RuntimeException e) {
+            AppLog.w("yandex forecast: " + e);   // the days stay as the first source has them
+        }
+    }
+
+    /**
+     * Today and the next five days from the page's short forecast strip (highest and lowest temperature per day) and the
+     * hidden text of the day cards (the sky at midday). Days that can't be read keep the first source's numbers.
+     */
+    private void yandexDays(Weather w, String page) {
+        int strip = page.indexOf("AppShortForecastContainer_days");
+        if (strip < 0) return;
+        String s = page.substring(strip, Math.min(page.length(), strip + 40_000));
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("AppShortForecastDay_temperature[^>]*>([+\\-−]?)(\\d+)°").matcher(s);
+        double[] temps = new double[12];
+        int n = 0;
+        while (n < 12 && m.find()) temps[n++] = (m.group(1).equals("-") || m.group(1).equals("−") ? -1 : 1) * Integer.parseInt(m.group(2));
+        // Day cards: the sky at midday ("днём").
+        int[] codes = new int[6];
+        java.util.Arrays.fill(codes, -1);
+        java.util.regex.Pattern midday = java.util.regex.Pattern.compile("дн[ёе]м\\s*([+\\-−]?)(\\d+)°,\\s*ощущается как\\s*[+\\-−]?\\d+°,\\s*([^,<]+)");
+        int from = 0;
+        for (int d = 0; d < 6; d++) {
+            int at = page.indexOf("AppForecastDay_dayCard", from);
+            if (at < 0) break;
+            int next = page.indexOf("AppForecastDay_dayCard", at + 20);
+            java.util.regex.Matcher c = midday.matcher(page.substring(at, next < 0 ? Math.min(page.length(), at + 4000) : Math.min(next, at + 4000)));
+            if (c.find()) {
+                codes[d] = russianSky(c.group(3).trim().toLowerCase(java.util.Locale.ROOT));
+                if (d == 0) w.dayTemp = (c.group(1).equals("-") || c.group(1).equals("−") ? -1 : 1) * Integer.parseInt(c.group(2));
+            }
+            from = at + 20;
+        }
+        for (int d = 0; d < 6 && 2 * d + 1 < n; d++) {
+            w.fcMax[d] = temps[2 * d];
+            w.fcMin[d] = temps[2 * d + 1];
+            if (codes[d] >= 0) w.fcCode[d] = codes[d];
+        }
+        if (n >= 2) {
+            w.max = temps[0];
+            w.min = temps[1];
+        }
+        for (int d = 1; d <= 2; d++) {
+            if (2 * d + 1 < n) {
+                w.dayMax[d - 1] = temps[2 * d];
+                w.dayMin[d - 1] = temps[2 * d + 1];
+                if (codes[d] >= 0) w.dayCode[d - 1] = codes[d];
+            }
+        }
+        cache.edit().putFloat("yaDayTemp", (float) w.dayTemp).apply();
+        StringBuilder saved = new StringBuilder();   // kept for the next start, until the page is read again
+        for (int d = 0; d < 6; d++) saved.append(w.fcMax[d]).append(',').append(w.fcMin[d]).append(',').append(w.fcCode[d]).append(';');
+        cache.edit().putString("yaDays", saved.toString()).apply();
+    }
+
+    /** The days saved by yandexDays, for the first screen after a start. */
+    private void applyCachedDays(Weather w) {
+        String saved = cache.getString("yaDays", "");
+        String[] days = saved.split(";");
+        if (days.length < 6) return;
+        for (int d = 0; d < 6; d++) {
+            String[] v = days[d].split(",");
+            if (v.length < 3) return;
+            w.fcMax[d] = Double.parseDouble(v[0]);
+            w.fcMin[d] = Double.parseDouble(v[1]);
+            w.fcCode[d] = Integer.parseInt(v[2]);
+        }
+        w.max = w.fcMax[0];
+        w.min = w.fcMin[0];
+        for (int d = 1; d <= 2; d++) {
+            w.dayMax[d - 1] = w.fcMax[d];
+            w.dayMin[d - 1] = w.fcMin[d];
+            w.dayCode[d - 1] = w.fcCode[d];
+        }
+    }
+
+    /** Yandex's words for the sky ("пасмурно", "небольшой дождь", ...) as a WMO code; -1 when not recognised. */
+    private static int russianSky(String p) {
+        if (p.contains("гроз")) return 95;                                   // гроз
+        if (p.contains("град")) return 99;                                   // град
+        if (p.contains("туман")) return 45;                             // туман
+        if (p.contains("дождь со снег")) return 71;   // дождь со снегом
+        if (p.contains("снег")) return p.contains("сильн") ? 75 : p.contains("небольш") ? 71 : 73;   // снег
+        if (p.contains("ливен")) return p.contains("сильн") ? 82 : 81;   // ливень
+        if (p.contains("морос")) return 51;                             // морось
+        if (p.contains("дожд")) return p.contains("сильн") ? 65 : p.contains("небольш") ? 61 : 63;   // дождь
+        if (p.contains("пасмур")) return 3;                        // пасмурно
+        if (p.contains("проясн")) return 3;                        // облачно с прояснениями
+        if (p.contains("малооблач")) return 2;      // малооблачно
+        if (p.contains("облач")) return 3;                              // облачно
+        if (p.contains("ясно")) return 0;                                    // ясно
+        return -1;
+    }
+
+    /** "1,7 м/с" / "1.7 m/s"; empty when there is no wind data. */
+    static String windSpeedText(Weather w) {
+        if (Double.isNaN(w.windSpeed)) return "";
+        return String.format(Ui.ru ? new Locale("ru") : Locale.US, "%.1f", w.windSpeed) + (Ui.ru ? " м/с" : " m/s");
+    }
+
+    /** The compass bearing the wind blows towards (0 = north, 90 = east), or NaN without a direction. */
+    static float windToBearing(Weather w) {
+        String[] names = {"NORTH", "NORTH_EAST", "EAST", "SOUTH_EAST", "SOUTH", "SOUTH_WEST", "WEST", "NORTH_WEST"};
+        for (int i = 0; i < names.length; i++) if (names[i].equals(w.windDir)) return (i * 45 + 180) % 360;   // it blows from there
+        return Float.NaN;
+    }
+
+    /** "762 мм" / "762 mmHg"; empty when there is no data. */
+    static String pressureValue(Weather w) {
+        if (w.pressure < 0) return "";
+        return w.pressure + (Ui.ru ? " мм" : " mmHg");
+    }
+
+    /** Yandex's `condition` ("CLOUDY", "LIGHT_RAIN", ...) as a WMO code, which the rest of the app speaks. */
+    private static int yandexCode(String c, String phenomenon) {
+        if (phenomenon.contains("FOG")) return 45;
+        if (c.contains("THUNDER")) return 95;
+        switch (c) {
+            case "CLEAR": return 0;
+            case "PARTLY_CLOUDY": return 2;
+            case "CLOUDY": case "OVERCAST": return 3;
+            case "DRIZZLE": return 51;
+            case "LIGHT_RAIN": return 61;
+            case "RAIN": case "MODERATE_RAIN": return 63;
+            case "HEAVY_RAIN": return 65;
+            case "SHOWERS": return 81;
+            case "WET_SNOW": case "LIGHT_SNOW": return 71;
+            case "SNOW": return 73;
+            case "SNOW_SHOWERS": return 85;
+            case "HAIL": return 99;
+            default: return c.contains("SNOW") ? 73 : c.contains("RAIN") ? 63 : 3;
+        }
+    }
+
+    /**
+     * Weather and the rest go over the real network (Wi-Fi or cable), never through the VPN, even though Free My TV is
+     * among the apps the VPN carries (that is what lets the VPN indicator test the real path).
+     */
+    private static HttpURLConnection open(String url) throws IOException {
+        URL u = new URL(url);
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) appCtx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                if (nc != null && !nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)
+                        && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                    return (HttpURLConnection) n.openConnection(u);
+                }
+            }
+        } catch (RuntimeException ignored) {}
+        return (HttpURLConnection) u.openConnection();
+    }
+
     private static String get(String url) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection c = open(url);
         c.setConnectTimeout(6000);
         c.setReadTimeout(6000);
-        c.setRequestProperty("User-Agent", "FreeMyTV");
+        c.setRequestProperty("User-Agent", USER_AGENT);
         try {
             if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
             try (InputStream in = c.getInputStream()) {

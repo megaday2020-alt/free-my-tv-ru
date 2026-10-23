@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Free My TV</string>
+    <string name="v2ray_service">Lets Free My TV read the server list of the V2RayTun app (and only that app) and tap a server, so it can pick the best VPN server when nobody is using the box. It reads nothing else.</string>
     <string name="remote_key_service">Lets the app buttons on the remote (Netflix, YouTube, Prime Video, TCL Channel) open the apps you picked in Free My TV, from any app. It only reads those buttons.</string>
 </resources>

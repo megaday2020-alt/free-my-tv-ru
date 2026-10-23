@@ -626,7 +626,7 @@ public class SettingsActivity extends Activity {
 
         private static final String[] LANGUAGES = {"auto", "pt", "en", "es", "de", "ru"}, UNITS = {"auto", "C", "F"}, THEMES = {"auto", "light", "dark"};
         /** Home Settings: language, temperature, theme, weather, quotes, then one row per coin. */
-        private static final int CITY_ROW = 4, COIN_ROWS = 6;
+        private static final int CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7, MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, COIN_ROWS = 11;
 
         private boolean dollar() {
             return "BRL".equalsIgnoreCase(Config.CURRENCY.trim());
@@ -640,6 +640,11 @@ public class SettingsActivity extends Activity {
             l.add(Ui.tr("Widget do clima", "Weather widget"));
             l.add(Ui.tr("Cidade", "City"));
             l.add(Ui.tr("Widget de cotações", "Quotes widget"));
+            l.add(Ui.ru ? "Анимация фона" : Ui.tr("Animação de fundo", "Background animation"));
+            l.add(Ui.ru ? "Звуки щелчков" : Ui.tr("Sons de clique", "Click sounds"));
+            l.add(Ui.ru ? "Ночное обслуживание" : Ui.tr("Manutenção noturna", "Night maintenance"));
+            l.add(Ui.ru ? "Страж VPN" : Ui.tr("Guarda da VPN", "VPN guard"));
+            l.add(Ui.ru ? "Выбор сервера VPN" : Ui.tr("Servidor da VPN", "VPN server picker"));
             l.add("Bitcoin");
             l.add("Ethereum");
             l.add("Solana");
@@ -660,6 +665,11 @@ public class SettingsActivity extends Activity {
             v[3] = onOff(Prefs.weather());
             v[CITY_ROW] = !cityStatus.isEmpty() ? cityStatus : Prefs.city().isEmpty() ? "—" : Prefs.city();
             v[5] = onOff(Prefs.quotes());
+            v[ANIMATION_ROW] = onOff(Prefs.animation());
+            v[SOUNDS_ROW] = onOff(Prefs.sounds());
+            v[MAINTENANCE_ROW] = onOff(Prefs.maintenance());
+            v[VPN_GUARD_ROW] = onOff(Prefs.vpnGuard());
+            v[SERVER_ROW] = onOff(Prefs.serverPick());
             // No quotes widget, nowhere to show prices: the coins read as off (and stay locked) until it is back on.
             for (int i = COIN_ROWS; i < v.length; i++) v[i] = onOff(Prefs.quotes() && Prefs.coin(i - COIN_ROWS));
             return v;
@@ -734,6 +744,11 @@ public class SettingsActivity extends Activity {
                 case 3: Prefs.setWeather(!Prefs.weather()); break;
                 case CITY_ROW: return;
                 case 5: Prefs.setQuotes(!Prefs.quotes()); break;
+                case ANIMATION_ROW: Prefs.setAnimation(!Prefs.animation()); break;
+                case SOUNDS_ROW: Prefs.setSounds(!Prefs.sounds()); break;
+                case MAINTENANCE_ROW: Prefs.setMaintenance(!Prefs.maintenance()); break;
+                case VPN_GUARD_ROW: Prefs.setVpnGuard(!Prefs.vpnGuard()); break;
+                case SERVER_ROW: Prefs.setServerPick(!Prefs.serverPick()); break;
                 default:
                     if (!Prefs.quotes()) return;
                     Prefs.setCoin(focus - COIN_ROWS, !Prefs.coin(focus - COIN_ROWS));

@@ -598,6 +598,12 @@ final class HomeMode {
             if (!mode.equals(state(c).optString("mode"))) return;
             try (Adb adb = Adb.connect(c, 10_000, null)) {
                 measureMemory(c, adb, mode);
+                // The home button too, but only when Free My TV is what's on the screen: the measurement flips between
+                // the settings and the home screen for a few seconds, which must never cut into another app. It runs
+                // after a switch of mode and after an update of the app, never on its own.
+                if (adb.shell("dumpsys activity activities | grep mResumedActivity").contains(PKG + "/")) {
+                    measureHomeTime(c, adb, mode);
+                }
             } catch (Exception e) {
                 AppLog.w("memory measurement failed: " + e.getMessage());
             }

@@ -83,9 +83,32 @@ final class Prefs {
 
     // MARK: - City
 
-    static String city() { return sp().getString("city", Config.CITY).trim(); }
-    static String latitude() { return sp().getString("latitude", Config.LATITUDE); }
-    static String longitude() { return sp().getString("longitude", Config.LONGITUDE); }
+    /** The place of the TV's time zone, for a generic build; null when the build has its own city (or the zone is unknown). */
+    private static String[] zonePlace() {
+        return Config.AUTO_LOCATION ? Zones.guess(app) : null;
+    }
+
+    static String city() {
+        String[] z = zonePlace();
+        return sp().getString("city", z != null ? z[0] : Config.CITY).trim();
+    }
+    static String latitude() {
+        String[] z = zonePlace();
+        return sp().getString("latitude", z != null ? z[1] : Config.LATITUDE);
+    }
+    static String longitude() {
+        String[] z = zonePlace();
+        return sp().getString("longitude", z != null ? z[2] : Config.LONGITUDE);
+    }
+
+    /** Yandex Weather's page as the source of the current weather: on for Russia and its neighbours (the build can force it). */
+    static boolean yandexWeather() {
+        String v = Config.WEATHER_YANDEX;
+        if (v.equals("true")) return true;
+        if (v.equals("false")) return false;
+        String[] z = Zones.guess(app);
+        return z != null && "RU BY KZ UZ KG TJ TM AM AZ GE MD UA".contains(z[3]);
+    }
 
     static void setCity(String name, String latitude, String longitude) {
         sp().edit().putString("city", name).putString("latitude", latitude).putString("longitude", longitude).apply();
@@ -96,6 +119,26 @@ final class Prefs {
 
     static boolean weather() { return sp().getBoolean("weather", true); }
     static void setWeather(boolean on) { put("weather", on); }
+
+    /** The moving weather sky behind the home screen (the plain gradient stays when it is off). */
+    static boolean animation() { return sp().getBoolean("animation", true); }
+    static void setAnimation(boolean on) { put("animation", on); }
+
+    /** Night maintenance around 4:00: caches, and a restart after a week up. */
+    static boolean maintenance() { return sp().getBoolean("maintenance", true); }
+    static void setMaintenance(boolean on) { put("maintenance", on); Maintenance.schedule(app); }
+
+    /** Picks the best VPN server in V2RayTun by itself when nobody uses the box (on; turn it off in the settings). */
+    static boolean serverPick() { return sp().getBoolean("serverPick", true); }
+    static void setServerPick(boolean on) { put("serverPick", on); VpnServers.schedule(app); }
+
+    /** VPN guard: brings V2RayTun's VPN back when it has been down for a while. */
+    static boolean vpnGuard() { return sp().getBoolean("vpnGuard", true); }
+    static void setVpnGuard(boolean on) { put("vpnGuard", on); VpnGuard.schedule(app); }
+
+    /** The soft click when moving focus and opening on the home screen (off by default here). */
+    static boolean sounds() { return sp().getBoolean("sounds", false); }
+    static void setSounds(boolean on) { put("sounds", on); }
 
     static boolean quotes() { return sp().getBoolean("quotes", Config.SHOW_CRYPTO); }
     static void setQuotes(boolean on) { put("quotes", on); }

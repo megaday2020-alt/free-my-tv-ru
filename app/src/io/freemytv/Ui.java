@@ -51,7 +51,7 @@ final class Ui {
         semibold = font(a, 14, 600);
     }
 
-    /** Inter at an optical size (14 = text, 32 = display) and weight; the system font if the file is missing. */
+    /** Manrope at a weight (the optical size is ignored: Manrope has no such axis); the system font if the file is missing. */
     private static Typeface font(AssetManager a, int opticalSize, int weight) {
         if (has(a, FONT)) {
             try {
@@ -64,7 +64,7 @@ final class Ui {
         return Typeface.create(Typeface.DEFAULT, weight, false);
     }
 
-    private static final String FONT = "fonts/InterVariable.ttf";
+    private static final String FONT = "fonts/Manrope.ttf";   // Manrope (OFL), a variable font with a weight axis
 
     /** "pt", "es", "de", "ru" or "en": the one picked (TV settings or config.properties), or with "auto" the TV's own, else English. */
     private static String language() {

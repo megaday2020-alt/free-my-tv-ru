@@ -6,6 +6,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- After the TV boots (and after a TV update), checks that Free My TV mode is still as you left it. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -70,6 +71,20 @@
 
         <!-- The home screen. Its own process (:home): if it ever crashes, the safety net in the main process still
              works. It only becomes the TV's home screen in Free My TV mode (cmd package set-home-activity). -->
+        <activity
+            android:name=".SleepMenuActivity"
+            android:process=":home"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
+            android:name=".DarkActivity"
+            android:process=":home"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="io.freemytv.dark"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <activity
             android:name=".HomeActivity"
             android:process=":home"
@@ -137,6 +152,20 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/remote_key_service" />
+        </service>
+
+        <!-- Reads V2RayTun's server list and taps a server (the VPN server picker); limited to that one app. -->
+        <service
+            android:name=".V2RayService"
+            android:exported="true"
+            android:label="Free My TV (VPN servers)"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/v2ray_service" />
         </service>
 
         <receiver

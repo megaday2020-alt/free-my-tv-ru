@@ -35,6 +35,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +94,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final float L_TITLE_BASE = 130, L_TABBAR_TOP = 158, L_TABBAR_H = 68, L_CARDS_TOP = 262, L_CARD_H = 442;
     private static final float L_TALL_W = 320, L_CARD_GAP = 40, L_BUTTON = 68, L_BUTTON_GAP = 20, L_BUTTON_CY = 103;
     private static final float L_PLATTER_TOP = 814, L_TILE_H = 126;
-    private static final float L_DATE_BASE = 330, L_CLOCK_BASE = 540, L_WEATHER_BASE = 626, L_QUOTES_BASE = 694;
+    private static final float L_DATE_BASE = 330, L_CLOCK_BASE = 540, L_WEATHER_BASE = 626, L_WIND_BASE = 682, L_NOW_BASE = 746, L_FORECAST_BASE = 690, L_QUOTES_BASE = 754;
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static final String[] TABS = {"Explorar", "Filmes", "Séries"};
     private static final String[] TABS_RU = {"Обзор", "Фильмы", "Сериалы"};
@@ -230,6 +231,42 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private int w, h;
     private float k = 1;
     private String clockText = "", dateText = "", weatherLine = "";
+    private final String[] forecastLine = new String[2];
+    private String nowLine = "";
+
+    /** The wind as symbols: a wind glyph, an arrow towards where the wind blows, and its speed. Returns the end x. */
+    private float drawAir(Canvas c, HomeData.Weather wx, float x, float base, Paint text, int ink) {
+        float s = 30 * k, cy = base - Ui.halfCap(text);
+        String speed = HomeData.windSpeedText(wx);
+        wifiPaint.setColor(ink);
+        wifiPaint.setStrokeWidth(2.6f * k);
+        if (!speed.isEmpty()) {
+            float cx = x + s / 2, r = 0.13f * s;
+            float topY = cy - 0.2f * s, botY = cy + 0.2f * s;
+            c.drawLine(cx - 0.5f * s, topY, cx + 0.12f * s, topY, wifiPaint);
+            tmp.set(cx + 0.12f * s - r, topY - 2 * r, cx + 0.12f * s + r, topY);
+            c.drawArc(tmp, 90, -270, false, wifiPaint);
+            c.drawLine(cx - 0.5f * s, cy, cx + 0.38f * s, cy, wifiPaint);
+            c.drawLine(cx - 0.5f * s, botY, cx + 0.0f * s, botY, wifiPaint);
+            tmp.set(cx - r, botY, cx + r, botY + 2 * r);
+            c.drawArc(tmp, -90, 270, false, wifiPaint);
+            x += s + 12 * k;
+            float bearing = HomeData.windToBearing(wx);
+            if (!Float.isNaN(bearing) && wx.windSpeed >= 0.5) {
+                float len = 22 * k, ax = x + len / 2;
+                c.save();
+                c.rotate(bearing, ax, cy);
+                c.drawLine(ax, cy + len / 2, ax, cy - len / 2, wifiPaint);
+                c.drawLine(ax, cy - len / 2, ax - 0.32f * len, cy - len / 2 + 0.34f * len, wifiPaint);
+                c.drawLine(ax, cy - len / 2, ax + 0.32f * len, cy - len / 2 + 0.34f * len, wifiPaint);
+                c.restore();
+                x += len + 12 * k;
+            }
+            c.drawText(speed, x, base, text);
+            x += text.measureText(speed);
+        }
+        return x;
+    }
     private long weatherLineAt = -1;
     private int weatherLinePrefs = -1;
     private String weatherLineLanguage = "";
@@ -274,6 +311,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private String textLanguage;
     private String weatherTitle, nowTemp, highLow, sunriseText, sunsetText, staleText;
     private final String[] hourText = new String[6], hourTempText = new String[6];
+    private final String[] dayText = new String[6], dayTempText = new String[6];
     private final String[] priceText = new String[HomeData.COINS.length], changeText = new String[HomeData.COINS.length];
 
     /** What the hero shows: a recommendation or, without any, the date, the time and the weather. */
@@ -351,6 +389,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         data = HomeData.get(a);
         recs = Recs.get(a);
         click = new Click(a);
+        v2Installed = HomeApps.installed(a, "com.v2raytun.android");
         ui = a.getSharedPreferences("home-ui", Context.MODE_PRIVATE);
         tvInputs = (TvInputManager) a.getSystemService(Context.TV_INPUT_SERVICE);
         setFocusable(true);
@@ -467,9 +506,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** The three corner buttons, with their names in the current language. */
     private void makeLightButtons() {
         lightButtons.clear();
-        lightButtons.add(HomeApps.action(HomeApps.LIVE_TV, "live", Ui.tr("TV aberta", "Live TV"), "live_tv"));
-        lightButtons.add(HomeApps.action(HomeApps.INPUTS, "inputs", Ui.tr("Entradas HDMI", "HDMI Inputs"), "hdmi"));
-        lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.tr("Configurações", "Settings"), "settings"));
+        // This box has no TV tuner or HDMI inputs: only the settings button is left.
+        lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.ru ? "Настройки" : Ui.tr("Configurações", "Settings"), "settings"));
     }
 
     private static String[] tabs() {
@@ -597,7 +635,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         drawerLabel.setTextAlign(Paint.Align.CENTER);
         cardTitle = Ui.text(Ui.semibold, 25 * k, 0xB3FFFFFF);
         cardText = Ui.text(Ui.medium, 29 * k, 0xF2FFFFFF);
-        cardDim = Ui.numbers(Ui.medium, 23 * k, 0xADFFFFFF);
+        cardDim = Ui.text(Ui.medium, 23 * k, 0xADFFFFFF);
         cardDimRight = Ui.text(Ui.medium, 21 * k, 0x99FFFFFF);
         cardDimRight.setTextAlign(Paint.Align.RIGHT);
         bigTemp = Ui.numbers(Ui.light, 100 * k, 0xFFFFFFFF);
@@ -677,7 +715,42 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
                 || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty();
         idle = !busy;
+        if (up - vpnCheckedAt >= 5000) {
+            vpnCheckedAt = up;
+            boolean vpn = vpnActive();
+            int wifi = wifiLevel();
+            if (!vpn) {
+                probeState = 0;
+                probeFails = 0;
+            } else if (PROBE_ON && up - probeAt >= 15_000) {   // a real look every 15 seconds while the VPN is up
+                probeAt = up;
+                probeVpn();
+            }
+            if (vpn != vpnOn || wifi != wifiBars) {
+                vpnOn = vpn;
+                wifiBars = wifi;
+                statusDirty = true;
+                status.invalidate();
+            }
+            if (up - tempCheckedAt >= 30_000) {
+                tempCheckedAt = up;
+                checkTemperature();
+            }
+        }
+        // The weather sky moves at ~30 fps while the plain background shows (not over a photo or a full-screen sheet).
+        boolean animate = Prefs.animation() && bgTo == null && !sheetOpen && sheet.value < 0.001f && !picksOn();
+        if (animate && up - skyAt >= 40) {
+            skyAt = up;
+            sky.invalidate();
+        }
+        boolean blink = vpnOn && probeState == 2;   // the VPN is up but nothing gets through: a fast red blink
+        if (blink && up - blinkAt >= 110) {
+            blinkAt = up;
+            status.invalidate();
+        }
         if (busy) Choreographer.getInstance().postFrameCallback(this);
+        else if (blink) Choreographer.getInstance().postFrameCallbackDelayed(this, 110);
+        else if (animate) Choreographer.getInstance().postFrameCallbackDelayed(this, 40);
         else Choreographer.getInstance().postFrameCallbackDelayed(this, 1000);
     }
 
@@ -1312,6 +1385,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         } else {
             if (it.tile != null) roundImage(c, it.tile, cell, r);
         }
+        // A thin, barely visible white outline so the dark tiles don't get lost on the background.
+        tileOutline.setStrokeWidth(1.5f * k);
+        tileOutline.setColor(Ui.alpha(0xFFFFFFFF, 0.2f + 0.16f * fc));
+        tmp.set(cell);
+        tmp.inset(0.75f * k, 0.75f * k);
+        c.drawRoundRect(tmp, r, r, tileOutline);
+    }
+
+    private final Paint tileOutline = new Paint(Paint.ANTI_ALIAS_FLAG);
+    {
+        tileOutline.setStyle(Paint.Style.STROKE);
     }
 
     /**
@@ -1398,6 +1482,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static List<HomeApps.Item> drawerList(Context c) {
         List<HomeApps.Item> list = HomeApps.allInputs(c);
         list.addAll(HomeApps.drawerShortcuts());
+        if (!HomeApps.installed(c, "com.v2raytun.android")) {   // the VPN server picker needs V2RayTun
+            for (java.util.Iterator<HomeApps.Item> it = list.iterator(); it.hasNext(); ) if (it.next().kind == HomeApps.SERVER_PICK) it.remove();
+        }
         return list;
     }
 
@@ -1540,7 +1627,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         drawerLabel.setTextSize(23 * k);
     }
 
-    /** Weather for your location: now (large), the next 6 hours, and sunrise and sunset. */
+    /** Weather for your location: now (large), today and the next five days, and sunrise and sunset. */
     private void drawWeatherCard(Canvas c, RectF r) {
         drawerCard(c, r);
         if (Ui.LEGACY) weatherSnapshot.draw(c, r, drawerCardsKey(), cc -> drawWeather(cc, r));
@@ -1566,16 +1653,19 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         fill.setShader(null);
         fill.setColor(tone(0x1A000000, 0x24FFFFFF));
         c.drawRoundRect(split - k, r.top + 34 * k, split + k, r.bottom - 34 * k, k, k, fill);
+        // Today and the next five days: name, weather at midday, highest and lowest temperature.
         float hx = split + 30 * k, hw = (r.right - 30 * k - hx) / 6;
-        for (int i = 0; i < wx.hours.size() && i < 6; i++) {
+        for (int i = 0; i < 6; i++) {
+            if (dayTempText[i] == null) continue;
             float hc = hx + hw * (i + 0.5f);
-            c.drawText(hourText[i], hc, r.top + 96 * k, hourPaint);
-            Symbols.draw(getContext(), c, Symbols.weather(wx.hourCode.get(i), wx.hourDay.get(i)), hc, r.top + 142 * k, 30 * k, drawerInk(0.9f));
-            c.drawText(hourTempText[i], hc, r.top + 196 * k, hourTemp);
+            c.drawText(dayText[i], hc, r.top + 96 * k, hourPaint);
+            Symbols.draw(getContext(), c, Symbols.weather(wx.fcCode[i], true), hc, r.top + 142 * k, 30 * k, drawerInk(0.9f));
+            c.drawText(dayTempText[i], hc, r.top + 196 * k, hourTemp);
         }
         float sx = hx, base = r.top + 258 * k;
         if (wx.sunrise != 0) sx = sunItem(c, "sunrise", sunriseText, sx, base) + 36 * k;
-        if (wx.sunset != 0) sunItem(c, "sunset", sunsetText, sx, base);
+        if (wx.sunset != 0) sx = sunItem(c, "sunset", sunsetText, sx, base) + 40 * k;
+        drawAir(c, wx, sx, base, cardDim, tone(L_DIM, 0xB3FFFFFF));
     }
 
     private void refreshDrawerText() {
@@ -1587,13 +1677,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             textWeather = wx;
             weatherTitle = Prefs.city().isEmpty() ? Ui.tr("Clima", "Weather") : Prefs.city();
             nowTemp = HomeData.degrees(wx.temp);
-            highLow = Ui.ru ? "Макс. " + HomeData.degrees(wx.max) + "   Мин. " + HomeData.degrees(wx.min)
-                    : Ui.en ? "H:" + HomeData.degrees(wx.max) + "   L:" + HomeData.degrees(wx.min)
-                    : Ui.de ? "H:" + HomeData.degrees(wx.max) + "   T:" + HomeData.degrees(wx.min)
-                    : "Máx. " + HomeData.degrees(wx.max) + "   Mín. " + HomeData.degrees(wx.min);
-            for (int i = 0; i < wx.hours.size() && i < 6; i++) {
-                hourText[i] = HomeData.hour(wx.hours.get(i));
-                hourTempText[i] = HomeData.degrees(wx.hourTemp.get(i));
+            double dayTemp = Double.isNaN(wx.dayTemp) ? wx.max : wx.dayTemp;
+            highLow = (Ui.ru ? "Днём " : Ui.en ? "Day " : Ui.de ? "Tags " : "Dia ") + HomeData.degrees(dayTemp);
+            for (int i = 0; i < 6; i++) {
+                if (Double.isNaN(wx.fcMax[i]) || wx.fcCode[i] < 0) { dayTempText[i] = null; continue; }
+                String name = new java.text.SimpleDateFormat("EEE", Ui.locale()).format(new java.util.Date(wx.fcAt[i] + 12 * 3_600_000L));
+                name = name.isEmpty() ? name : name.substring(0, 1).toUpperCase(Ui.locale()) + name.substring(1);
+                dayText[i] = i == 0 ? (Ui.ru ? "Сегодня" : Ui.en ? "Today" : Ui.es ? "Hoy" : Ui.de ? "Heute" : "Hoje") : name;
+                dayTempText[i] = i == 0 ? HomeData.degrees(dayTemp)   // today: the one daytime temperature
+                        : HomeData.degrees(wx.fcMax[i]) + " / " + HomeData.degrees(wx.fcMin[i]);
             }
             sunriseText = Ui.tr("Nascer ", "Sunrise ") + Ui.time(wx.sunrise);
             sunsetText = Ui.tr("Pôr do sol ", "Sunset ") + Ui.time(wx.sunset);
@@ -2186,9 +2278,54 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             retarget(false);
             return;
         }
+        if (it.kind == HomeApps.REBOOT || it.kind == HomeApps.SLEEP || it.kind == HomeApps.CLEAN || it.kind == HomeApps.SLEEP_TIMER || it.kind == HomeApps.SERVER_PICK) {
+            quickAction(it);
+            return;
+        }
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
                 Math.round(r.width()), Math.round(r.height()));
         if (!opened) showToast(Ui.tr("Não deu para abrir ", "Couldn't open ") + it.label + ".");
+    }
+
+    // MARK: - Quick actions (drawer): sleep, clear caches, restart, through the TV's own ADB
+
+    private int pendingQuick = -1;
+    private long pendingQuickAt;
+
+    private void quickAction(HomeApps.Item it) {
+        if (it.kind == HomeApps.SERVER_PICK) {   // check the VPN servers now and switch to the best one
+            ModeJob.schedule(getContext(), ModeJob.SERVERS, "manual", 0);
+            showToast(Ui.ru ? "Проверяю серверы VPN, это займёт около минуты" : Ui.tr("Verificando os servidores VPN…", "Checking the VPN servers, about a minute"));
+            return;
+        }
+        if (it.kind == HomeApps.SLEEP_TIMER) {   // a small menu: how long until the night clock
+            activity.startActivity(new android.content.Intent(activity, SleepMenuActivity.class));
+            return;
+        }
+        long now = SystemClock.uptimeMillis();
+        if (it.kind == HomeApps.REBOOT && !(pendingQuick == it.kind && now - pendingQuickAt < 4000)) {
+            pendingQuick = it.kind;
+            pendingQuickAt = now;
+            showToast(Ui.ru ? "Нажмите ещё раз, чтобы перезагрузить" : Ui.tr("Pressione de novo para reiniciar", "Press again to restart"));
+            return;
+        }
+        pendingQuick = -1;
+        if (it.kind == HomeApps.SLEEP) {   // a black screen, not a real suspend: any key brings it back
+            activity.startActivity(new android.content.Intent(activity, DarkActivity.class));
+            return;
+        }
+        final String command = it.kind == HomeApps.REBOOT ? "reboot" : "pm trim-caches 8G";
+        final String done = it.kind == HomeApps.CLEAN ? (Ui.ru ? "Кэш очищен" : Ui.tr("Cache limpo", "Cache cleared")) : null;
+        final String failed = Ui.ru ? "Не удалось: включите отладку по USB" : Ui.tr("Falhou: ative a depuração USB", "Failed: turn on USB debugging");
+        new Thread(() -> {
+            try (Adb adb = Adb.connect(getContext(), 5000, null)) {
+                adb.shell(command);
+                if (done != null) handler.post(() -> showToast(done));
+            } catch (Exception e) {
+                AppLog.w("quick action: " + e.getMessage());
+                handler.post(() -> showToast(failed));
+            }
+        }, "quick-action").start();
     }
 
     // MARK: - Moving apps on the shelf
@@ -2597,7 +2734,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             x = topRects[i].right + 4 * k;
         }
         float b = L_BUTTON * k, right = CONTENT_R * k, cy = L_BUTTON_CY * k;
-        for (int i = 2; i >= 0; i--) {
+        for (int i = lightButtons.size() - 1; i >= 0; i--) {
             topRects[3 + i].set(right - b, cy - b / 2, right, cy + b / 2);
             right -= b + L_BUTTON_GAP * k;
         }
@@ -2645,9 +2782,16 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         // Drawer open: the background lightens (by day) or darkens (at night), as a filter on the drawing itself.
         android.graphics.ColorFilter v = veil(tone(0.32f, 0.42f) * Ui.clamp(drawer.value), blend(0xFFFFFFFF, 0xFF000000, night));
         if (bgTo == null || (fading && bgFrom == null)) {
-            if (lightGradient == null) lightGradient = new LinearGradient(0, 0, 0, h, 0xFFF5F5F7, 0xFFE2E2E7, Shader.TileMode.CLAMP);
-            if (nightGradient == null) nightGradient = new LinearGradient(0, 0, 0, h, 0xFF1C1C1E, 0xFF0B0B0D, Shader.TileMode.CLAMP);
+            int[] sky = skyColors();
+            int skyKey = Arrays.hashCode(sky);
+            if (skyKey != skyKeyUsed) {
+                skyKeyUsed = skyKey;
+                lightGradient = nightGradient = null;
+            }
+            if (lightGradient == null) lightGradient = new LinearGradient(0, 0, 0, h, sky[0], sky[1], Shader.TileMode.CLAMP);
+            if (nightGradient == null) nightGradient = new LinearGradient(0, 0, 0, h, sky[2], sky[3], Shader.TileMode.CLAMP);
             fill.setColorFilter(v);
+            fill.setDither(true);
             fill.setColor(0xFF000000);
             if (night < 0.999f) {
                 fill.setShader(lightGradient);
@@ -2659,13 +2803,254 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 c.drawRect(screen, fill);
                 fill.setAlpha(255);
             }
-            fill.setShader(null);
+            // A faint noise breaks up the bands of the 8-bit gradient.
+            if (noiseShader == null) {
+                int n = 128;
+                int[] px = new int[n * n];
+                java.util.Random rnd = new java.util.Random(3);
+                for (int i = 0; i < px.length; i++) {
+                    int g = rnd.nextInt(256);
+                    px[i] = 0x07000000 | g << 16 | g << 8 | g;
+                }
+                noiseShader = new BitmapShader(Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT);
+            }
             fill.setColorFilter(null);
+            fill.setShader(noiseShader);
+            c.drawRect(screen, fill);
+            fill.setShader(null);
+            fill.setDither(false);
+            if (Prefs.animation() && !fading) {
+                HomeData.Weather wx = data.weather;
+                long dayStart = 6 * 60 * 60_000L, dayEnd = 18 * 60 * 60_000L;
+                weatherSky.draw(c, screen.width(), screen.height(), k, System.currentTimeMillis(), wx.code, night,
+                        Shaders.timeOfDay(System.currentTimeMillis(), 0), Shaders.timeOfDay(wx.sunrise, dayStart),
+                        Shaders.timeOfDay(wx.sunset, dayEnd), 1 - Ui.clamp(drawer.value));
+            }
         }
         imagePaint.setColorFilter(v);
         if (fading && bgFrom != null) drawLightImage(c, bgFrom, bgTo == null ? 1 - e : 1);
         if (bgTo != null) drawLightImage(c, bgTo, fading ? e : 1);
         imagePaint.setColorFilter(null);
+    }
+
+    // Top right corner, left of the settings button: VPN, Wi-Fi signal and the box's temperature.
+    private boolean vpnOn, v2Installed;   // the VPN indicator and the VPN buttons only show where a VPN is in use
+    // Real access through the VPN: a tiny request to YouTube over the VPN network. 0 = not known yet, 1 = answers, 2 = does not.
+    /** The probe only means something when Free My TV's own traffic goes through the VPN (V2RayTun's app list); it checks that first. */
+    private static final boolean PROBE_ON = true;
+    private int probeState;
+    private int probeFails;
+    private long probeAt, blinkAt;
+    private boolean probing;
+    private int wifiBars = -1;           // 0 to 4 bars; -1 = not on Wi-Fi
+    private volatile float tempC = Float.NaN;
+    private long vpnCheckedAt, tempCheckedAt;
+    private boolean tempBusy;
+    private Paint lStatus;
+    private final Paint wifiPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    {
+        wifiPaint.setStyle(Paint.Style.STROKE);
+        wifiPaint.setStrokeCap(Paint.Cap.ROUND);
+    }
+    private static final float HOT_C = 75;
+
+    private int wifiLevel() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            android.net.wifi.WifiInfo wi = wm.getConnectionInfo();
+            if (wi == null || wi.getRssi() <= -127) return -1;
+            return android.net.wifi.WifiManager.calculateSignalLevel(wi.getRssi(), 5);   // 0 to 4
+        } catch (RuntimeException e) {
+            return -1;
+        }
+    }
+
+    /** One tiny request (no body) to YouTube, sent over the VPN network itself, so it tells whether the VPN really carries traffic. */
+    private void probeVpn() {
+        if (probing) return;
+        probing = true;
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                android.net.ConnectivityManager cm0 = (android.net.ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+                android.net.NetworkCapabilities mine = cm0.getNetworkCapabilities(cm0.getActiveNetwork());
+                if (mine == null || !mine.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {   // outside the VPN: nothing to test
+                    handler.post(() -> {
+                        probing = false;
+                        probeFails = 0;
+                        if (probeState != 0) {
+                            probeState = 0;
+                            statusDirty = true;
+                            status.invalidate();
+                        }
+                    });
+                    return;
+                }
+                StringBuilder why = new StringBuilder();
+                int code = VpnGuard.probe(getContext(), "https://www.youtube.com/generate_204", 6000, false, false, why);
+                ok = code > 0 && code < 500;   // any answer: the path works
+                if (!ok) AppLog.w("vpn probe: " + why);
+            } catch (Exception ignored) {}
+            final boolean result = ok;
+            handler.post(() -> {
+                probing = false;
+                probeFails = result ? 0 : probeFails + 1;
+                int state = result ? 1 : probeFails >= 2 ? 2 : probeState;   // red only after two misses in a row
+                if (state != probeState) {
+                    AppLog.w("vpn probe: " + (state == 1 ? "YouTube answers through the VPN" : "no answer through the VPN"));
+                    probeState = state;
+                    statusDirty = true;
+                    status.invalidate();
+                }
+            });
+        }, "vpn-probe").start();
+    }
+
+    /** The hottest thermal zone, read from sysfs, or through the TV's own ADB when apps can't read it. */
+    private void checkTemperature() {
+        if (tempBusy) return;
+        tempBusy = true;
+        new Thread(() -> {
+            float max = Float.NaN;
+            try {
+                String text;
+                try {
+                    StringBuilder sb = new StringBuilder();
+                    for (int z = 0; z < 4; z++) {
+                        java.io.File f = new java.io.File("/sys/class/thermal/thermal_zone" + z + "/temp");
+                        if (!f.canRead()) continue;
+                        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) { sb.append(r.readLine()).append('\n'); }
+                    }
+                    text = sb.toString();
+                } catch (java.io.IOException e) {
+                    text = "";
+                }
+                if (text.trim().isEmpty()) {
+                    try (Adb adb = Adb.connect(getContext(), 3000, null)) {
+                        text = adb.shell("cat /sys/class/thermal/thermal_zone*/temp");
+                    }
+                }
+                for (String line : text.split("\n")) {
+                    try {
+                        float v = Float.parseFloat(line.trim());
+                        v = v > 1000 ? v / 1000 : v;
+                        if (Float.isNaN(max) || v > max) max = v;
+                    } catch (NumberFormatException ignored) {}
+                }
+            } catch (Exception e) {
+                AppLog.w("temperature: " + e.getMessage());
+            }
+            final float result = max;
+            handler.post(() -> {
+                boolean changed = Float.isNaN(result) != Float.isNaN(tempC)
+                        || (!Float.isNaN(result) && Math.round(result) != Math.round(tempC));
+                tempC = result;
+                tempBusy = false;
+                if (changed) {
+                    statusDirty = true;
+                    status.invalidate();
+                }
+            });
+        }, "temperature").start();
+    }
+
+    /** VPN, Wi-Fi bars and the temperature (orange when hot, red when very hot), right-aligned against the settings button. */
+    private void drawStatusCluster(Canvas c) {
+        if (lightButtons.isEmpty()) return;
+        if (lStatus == null) lStatus = Ui.text(Ui.semibold, 26 * k, L_DIM);
+        int ink = Ui.alpha(tone(L_INK, 0xEBFFFFFF), 0.8f);
+        float gap = 28 * k, x = topRects[3].left - gap, cy = topRects[3].centerY();
+        lStatus.setColor(ink);
+        fill.setShader(null);
+        if (!Float.isNaN(tempC)) {
+            String t = Math.round(tempC) + "°C";
+            float w = lStatus.measureText(t);
+            lStatus.setColor(tempC >= 85 ? 0xFFFF453A : tempC >= HOT_C ? 0xFFFF9F0A : ink);
+            c.drawText(t, x - w, cy + Ui.halfCap(lStatus), lStatus);
+            lStatus.setColor(ink);
+            x -= w + gap;
+        }
+        if (wifiBars >= 0) {
+            // The Wi-Fi symbol: a dot and three arcs; as many arcs light up as the signal has.
+            float R = 17 * k, w = R * 1.42f, cx = x - w / 2, by = cy + 10 * k;
+            int lit = Math.round(wifiBars * 3 / 4f);
+            wifiPaint.setStrokeWidth(3.2f * k);
+            for (int i = 0; i < 3; i++) {
+                float rad = R * (0.42f + 0.29f * i) ;
+                wifiPaint.setColor(i < lit ? ink : Ui.alpha(ink, 0.28f));
+                tmp.set(cx - rad, by - rad, cx + rad, by + rad);
+                c.drawArc(tmp, -135, 90, false, wifiPaint);
+            }
+            fill.setColor(ink);
+            c.drawCircle(cx, by, 2.6f * k, fill);
+            x -= w + gap;
+        }
+        if (!vpnOn && !v2Installed) return;   // no VPN on this TV: nothing to show
+        String label = vpnOn ? "VPN" : (Ui.ru ? "VPN выкл" : "VPN off");
+        float w = lStatus.measureText(label);
+        c.drawText(label, x - w, cy + Ui.halfCap(lStatus), lStatus);
+        int dot = !vpnOn ? 0xFF9A9AA0 : probeState == 2 ? 0xFFFF3B30 : 0xFF34C759;   // gray off, green works, red blinks, amber still checking
+        if (vpnOn && probeState == 2) {
+            float pulse = 0.5f + 0.5f * (float) Math.sin(SystemClock.uptimeMillis() / 1000.0 * 2 * Math.PI * 3.5);
+            dot = Ui.alpha(dot, 0.2f + 0.8f * pulse);
+        }
+        fill.setColor(dot);
+        c.drawCircle(x - w - 14 * k, cy, 7 * k, fill);
+    }
+    private final WeatherSky weatherSky = new WeatherSky();
+
+    private boolean vpnActive() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                if (nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) return true;
+            }
+        } catch (RuntimeException ignored) {}
+        return false;
+    }
+    private Shader noiseShader;
+    private long skyAt;
+    private int skyKeyUsed;
+    private final int[] skyOut = new int[4];
+
+    /**
+     * The plain background (no photo): a static two-color gradient for day and one for night, tinted by the weather
+     * and warmed around sunrise and sunset. Day colors stay light (the clock is dark ink), night colors dark.
+     * Returns day top, day bottom, night top, night bottom.
+     */
+    private int[] skyColors() {
+        HomeData.Weather wx = data.weather;
+        int code = wx.code;
+        int dt, db, nt, nb;
+        if (code < 0 || code <= 1) {                    // clear, or no data yet
+            dt = 0xFFA9D2FF; db = 0xFFEAF4FF; nt = 0xFF1B2D5C; nb = 0xFF090D1F;
+        } else if (code == 2) {                          // partly cloudy
+            dt = 0xFFC3D6EC; db = 0xFFEDF2F8; nt = 0xFF222F4A; nb = 0xFF0B0E19;
+        } else if (code == 3) {                          // cloudy
+            dt = 0xFFD3D9E2; db = 0xFFEFF1F5; nt = 0xFF262A36; nb = 0xFF0D0E14;
+        } else if (code == 45 || code == 48) {           // fog
+            dt = 0xFFDADDE0; db = 0xFFF1F2F3; nt = 0xFF2A2D31; nb = 0xFF101113;
+        } else if (code >= 95) {                         // thunderstorm
+            dt = 0xFFBDB6D9; db = 0xFFE6E2F2; nt = 0xFF2B1F4A; nb = 0xFF0C0818;
+        } else if (code >= 71 && code <= 77 || code == 85 || code == 86) {   // snow
+            dt = 0xFFD9E7F6; db = 0xFFF8FBFE; nt = 0xFF2A3752; nb = 0xFF10151F;
+        } else {                                         // rain
+            dt = 0xFFAFC3D6; db = 0xFFDCE5EE; nt = 0xFF1A2A3A; nb = 0xFF080E15;
+        }
+        // Warm tint within 75 minutes of sunrise or sunset (in steps, so the gradient is rebuilt only a few times).
+        long now = System.currentTimeMillis();
+        long t = Shaders.timeOfDay(now, 0);
+        long rise = Shaders.timeOfDay(wx.sunrise, 6 * 60 * 60_000L), set = Shaders.timeOfDay(wx.sunset, 18 * 60 * 60_000L);
+        long near = Math.min(Math.abs(t - rise), Math.abs(t - set));
+        float warm = Math.max(0, 1 - near / (75 * 60_000f));
+        warm = Math.round(warm * 6) / 6f * 0.85f;
+        if (warm > 0) {
+            dt = blend(dt, 0xFFFFC89A, warm); db = blend(db, 0xFFFFEBDC, warm);
+            nt = blend(nt, 0xFF4A2A4E, warm); nb = blend(nb, 0xFF150C1C, warm);
+        }
+        skyOut[0] = dt; skyOut[1] = db; skyOut[2] = nt; skyOut[3] = nb;
+        return skyOut;
     }
 
     private void drawLightImage(Canvas c, Backdrop b, float alpha) {
@@ -2727,17 +3112,46 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             weatherLineAt = data.weatherAt;
             weatherLinePrefs = Prefs.version;
             weatherLineLanguage = Ui.language;
+            // One temperature for the day instead of the high and the low: the daytime one (Yandex's "днём").
+            double dayTemp = Double.isNaN(wx.dayTemp) ? wx.max : wx.dayTemp;
             weatherLine = HomeData.degrees(wx.temp) + "  " + HomeData.condition(wx.code, wx.isDay) + "   "
-                    + (Ui.ru ? "Макс. " + HomeData.degrees(wx.max) + "  Мин. " + HomeData.degrees(wx.min)
-                    : Ui.en ? "H:" + HomeData.degrees(wx.max) + "  L:" + HomeData.degrees(wx.min)
-                    : Ui.de ? "H:" + HomeData.degrees(wx.max) + "  T:" + HomeData.degrees(wx.min)
-                    : "Máx. " + HomeData.degrees(wx.max) + "  Mín. " + HomeData.degrees(wx.min));
+                    + (Ui.ru ? "Днём " : Ui.en ? "Day " : Ui.de ? "Tags " : "Dia ") + HomeData.degrees(dayTemp);
+            nowLine = wx.nowcast;
+            for (int d = 0; d < 2; d++) {
+                if (Double.isNaN(wx.dayMax[d]) || wx.dayCode[d] < 0) { forecastLine[d] = null; continue; }
+                java.util.Date date = new java.util.Date(wx.dayAt[d] + 12 * 3_600_000L);
+                String name = d == 0 ? (Ui.ru ? "Завтра" : Ui.en ? "Tomorrow" : Ui.es ? "Mañana" : Ui.de ? "Morgen" : "Amanhã")
+                        : new java.text.SimpleDateFormat("EEEE", Ui.locale()).format(date);
+                if (d == 1 && !name.isEmpty()) name = name.substring(0, 1).toUpperCase(Ui.locale()) + name.substring(1);
+                forecastLine[d] = name + "   " + HomeData.degrees(wx.dayMax[d]) + " / " + HomeData.degrees(wx.dayMin[d]);
+            }
         }
         float size = 40 * k, base = L_WEATHER_BASE * k;
         String symbol = Symbols.weather(wx.code, wx.isDay);
         float sw = Symbols.width(getContext(), symbol, size);
         Symbols.draw(getContext(), c, symbol, x + sw / 2, base - Ui.halfCap(lWeather), size, lWeather.getColor());
         c.drawText(weatherLine, x + sw + 16 * k, base, lWeather);
+        // First line: now, the day's temperature and the wind. Tomorrow and the day after go on a line of their own.
+        float gap = 44 * k;
+        drawAir(c, wx, x + sw + 16 * k + lWeather.measureText(weatherLine) + gap, base, lWeather, lWeather.getColor());
+        float fx = x, fbase = L_FORECAST_BASE * k, fsize = 34 * k;
+        for (int d = 0; d < 2; d++) {
+            if (forecastLine[d] == null) continue;
+            String sym = Symbols.weather(wx.dayCode[d], true);
+            float w = Symbols.width(getContext(), sym, fsize);
+            Symbols.draw(getContext(), c, sym, fx + w / 2, fbase - Ui.halfCap(lWeather), fsize, lWeather.getColor());
+            c.drawText(forecastLine[d], fx + w + 12 * k, fbase, lWeather);
+            fx += w + 12 * k + lWeather.measureText(forecastLine[d]) + gap;
+        }
+        // Rain or snow soon, in Yandex's words, on a line of its own (only when something is expected).
+        if (!nowLine.isEmpty()) {
+            float ns = 34 * k, nbase = L_NOW_BASE * k, room = (CONTENT_R - MARGIN) * k * 0.75f;
+            String sym = Symbols.weather(63, true);
+            float nw = Symbols.width(getContext(), sym, ns);
+            Symbols.draw(getContext(), c, sym, x + nw / 2, nbase - Ui.halfCap(lWeather), ns, lWeather.getColor());
+            fitPaint.set(lWeather);
+            c.drawText(TextUtils.ellipsize(nowLine, fitPaint, room, TextUtils.TruncateAt.END).toString(), x + nw + 12 * k, nbase, lWeather);
+        }
     }
 
     /**
@@ -2813,7 +3227,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      */
     private void drawLightButtons(Canvas c) {
         applyTone();
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < lightButtons.size(); i++) {
             RectF r = topRects[3 + i];
             float f = Ui.clamp(topFocus[3 + i].value), s = 1 + 0.1f * f, rad = r.width() / 2 * s;
             cell.set(r.centerX() - rad, r.centerY() - rad, r.centerX() + rad, r.centerY() + rad);
@@ -2838,6 +3252,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 c.drawText(label, x, r.bottom + (40 + 4 * f) * k, lTip);
             }
         }
+        drawStatusCluster(c);
     }
 
     private boolean moveLight(int dx, int dy) {
@@ -2867,7 +3282,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 break;
             case Z_TOP:
                 if (dx != 0) {
-                    int next = Math.max(picksOn() ? 0 : 3, Math.min(5, topIndex + dx));
+                    int next = Math.max(picksOn() ? 0 : 3, Math.min(2 + lightButtons.size(), topIndex + dx));
                     if (next == topIndex) return true;
                     topIndex = next;
                     if (topIndex < 3) selectTab(topIndex);   // like Apple TV tabs: focusing a tab selects it

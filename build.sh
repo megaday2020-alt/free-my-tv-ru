@@ -21,13 +21,18 @@ KEYTOOL="${JAVA_HOME:+$JAVA_HOME/bin/}keytool"
 command -v "$JAVAC" >/dev/null 2>&1 || { echo "JDK not found. Install JDK 17 and set JAVA_HOME."; exit 1; }
 
 # --- Settings: config.properties -> Config.java
-if [ ! -f config.properties ]; then
-  cp config.example.properties config.properties
-  echo "Created config.properties: add your TMDB key and your city there (optional), then build again."
+# ./build.sh --generic builds FreeMyTV-generic.apk for any TV: no personal settings (config.generic.properties), the
+# weather city comes from the TV's own time zone and can be changed on the TV.
+CFG=config.properties
+OUT_APK=FreeMyTV.apk
+if [ "${1:-}" = "--generic" ]; then CFG=config.generic.properties; OUT_APK=FreeMyTV-generic.apk; fi
+if [ ! -f "$CFG" ]; then
+  cp config.example.properties "$CFG"
+  echo "Created $CFG: add your TMDB key and your city there (optional), then build again."
 fi
 prop() {
   local v
-  v="$(grep -E "^[[:space:]]*$1[[:space:]]*=" config.properties | tail -1 | cut -d= -f2- || true)"
+  v="$(grep -E "^[[:space:]]*$1[[:space:]]*=" "$CFG" | tail -1 | cut -d= -f2- || true)"
   v="$(printf '%s' "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '"\\')"
   printf '%s' "${v:-$2}"
 }
@@ -40,6 +45,7 @@ LAT="$(number latitude 40.7128)"
 LON="$(number longitude -74.0060)"
 ASSIST=false; [ "$(prop disable_assistant false)" = "true" ] && ASSIST=true
 CRYPTO=false; [ "$(prop show_crypto true)" = "true" ] && CRYPTO=true
+AUTOLOC=false; [ "$(prop auto_location false)" = "true" ] && AUTOLOC=true
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -59,6 +65,8 @@ final class Config {
     static final String TEMPERATURE = "$(prop temperature auto)";
     static final boolean DISABLE_ASSISTANT = $ASSIST;
     static final boolean SHOW_CRYPTO = $CRYPTO;
+    static final boolean AUTO_LOCATION = $AUTOLOC;
+    static final String WEATHER_YANDEX = "$(prop weather_yandex auto)";
 }
 EOF
 
@@ -120,5 +128,5 @@ if [ ! -f freemytv.keystore ]; then
   "$KEYTOOL" -genkeypair -keystore freemytv.keystore -alias freemytv -keyalg RSA -keysize 2048 -validity 20000 \
     -storepass freemytv -keypass freemytv -dname "CN=Free My TV" >/dev/null 2>&1
 fi
-"$BT/apksigner" sign --ks freemytv.keystore --ks-pass pass:freemytv --key-pass pass:freemytv --out FreeMyTV.apk out/aligned.apk
-echo "Built FreeMyTV.apk ($(du -h FreeMyTV.apk | cut -f1)). Install: adb install -r FreeMyTV.apk"
+"$BT/apksigner" sign --ks freemytv.keystore --ks-pass pass:freemytv --key-pass pass:freemytv --out "$OUT_APK" out/aligned.apk
+echo "Built $OUT_APK ($(du -h "$OUT_APK" | cut -f1)). Install: adb install -r $OUT_APK"

@@ -57,6 +57,8 @@ final class HomeApps {
     static final int APP = 0, LIVE_TV = 1, INPUT = 2, ALL_APPS = 3, SETTINGS = 4, ANDROID_SETTINGS = 5;
     /** The "HDMI Inputs" button: opens the bottom drawer on the inputs (the home screen handles it). */
     static final int INPUTS = 7;
+    /** Quick actions in the bottom drawer (run through the TV's own ADB by the home screen). */
+    static final int REBOOT = 8, SLEEP = 9, CLEAN = 10, SLEEP_TIMER = 11, SERVER_PICK = 12;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -207,6 +209,15 @@ final class HomeApps {
         return shortcut(kind, key, label, symbol);
     }
 
+    static boolean installed(Context c, String pkg) {
+        try {
+            c.getPackageManager().getPackageInfo(pkg, 0);
+            return true;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
     /** Free My TV settings, in the corner of the home screen. */
     static Item settings() {
         return shortcut(SETTINGS, "settings", Ui.tr("Ajustes", "Settings"), "settings");
@@ -218,6 +229,11 @@ final class HomeApps {
         items.add(shortcut(ALL_APPS, "all", Ui.tr("Todos os Apps", "All Apps"), "apps"));
         items.add(shortcut(SETTINGS, "settings", Ui.tr("Ajustes do Início", "Home Settings"), "settings"));
         items.add(shortcut(ANDROID_SETTINGS, "tv-settings", Ui.tr("Ajustes da TV", "TV Settings"), "tv_settings"));
+        items.add(shortcut(SLEEP, "sleep", Ui.ru ? "Ночные часы" : Ui.tr("Relógio noturno", "Night clock"), "bedtime"));
+        items.add(shortcut(SLEEP_TIMER, "sleeptimer", Ui.ru ? "Таймер сна" : Ui.tr("Temporizador", "Sleep timer"), "bell"));
+        items.add(shortcut(SERVER_PICK, "serverpick", Ui.ru ? "Сервер VPN" : Ui.tr("Servidor VPN", "VPN server"), "check"));
+        items.add(shortcut(CLEAN, "clean", Ui.ru ? "Очистить кэш" : Ui.tr("Limpar cache", "Clear cache"), "sparkles"));
+        items.add(shortcut(REBOOT, "reboot", Ui.ru ? "Перезагрузить" : Ui.tr("Reiniciar", "Restart"), "sync"));
         return items;
     }
 
