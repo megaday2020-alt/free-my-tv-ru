@@ -128,6 +128,14 @@ final class Prefs {
     static boolean maintenance() { return sp().getBoolean("maintenance", true); }
     static void setMaintenance(boolean on) { put("maintenance", on); Maintenance.schedule(app); }
 
+    /** Warmer colours from sunset to sunrise: 0 off, 1 soft, 2 medium, 3 strong. */
+    static int warm() { return sp().getInt("warm", 0); }
+    static void setWarm(int level) {
+        sp().edit().putInt("warm", level).apply();
+        version++;
+        new Thread(() -> WarmScreen.apply(app), "warm-screen").start();
+    }
+
     /** Picks the best VPN server in V2RayTun by itself when nobody uses the box (on; turn it off in the settings). */
     static boolean serverPick() { return sp().getBoolean("serverPick", true); }
     static void setServerPick(boolean on) { put("serverPick", on); VpnServers.schedule(app); }

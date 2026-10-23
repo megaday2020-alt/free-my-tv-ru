@@ -626,7 +626,8 @@ public class SettingsActivity extends Activity {
 
         private static final String[] LANGUAGES = {"auto", "pt", "en", "es", "de", "ru"}, UNITS = {"auto", "C", "F"}, THEMES = {"auto", "light", "dark"};
         /** Home Settings: language, temperature, theme, weather, quotes, then one row per coin. */
-        private static final int CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7, MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, COIN_ROWS = 11;
+        private static final int CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7, MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, COIN_ROWS = 14;
+        private String updateStatus = "";
 
         private boolean dollar() {
             return "BRL".equalsIgnoreCase(Config.CURRENCY.trim());
@@ -645,6 +646,9 @@ public class SettingsActivity extends Activity {
             l.add(Ui.ru ? "Ночное обслуживание" : Ui.tr("Manutenção noturna", "Night maintenance"));
             l.add(Ui.ru ? "Страж VPN" : Ui.tr("Guarda da VPN", "VPN guard"));
             l.add(Ui.ru ? "Выбор сервера VPN" : Ui.tr("Servidor da VPN", "VPN server picker"));
+            l.add(Ui.ru ? "Отчёт за неделю" : Ui.tr("Relatório da semana", "Weekly report"));
+            l.add(Ui.ru ? "Обновление приложения" : Ui.tr("Atualização", "App update"));
+            l.add(Ui.ru ? "Тёплый экран вечером" : Ui.tr("Tela quente à noite", "Warm screen at night"));
             l.add("Bitcoin");
             l.add("Ethereum");
             l.add("Solana");
@@ -670,6 +674,13 @@ public class SettingsActivity extends Activity {
             v[MAINTENANCE_ROW] = onOff(Prefs.maintenance());
             v[VPN_GUARD_ROW] = onOff(Prefs.vpnGuard());
             v[SERVER_ROW] = onOff(Prefs.serverPick());
+            v[REPORT_ROW] = Ui.ru ? "Показать" : Ui.tr("Mostrar", "Show");
+            String[] warmNames = Ui.ru ? new String[] {"Выкл", "Мягко", "Средне", "Сильно"} : new String[] {"Off", "Soft", "Medium", "Strong"};
+            v[WARM_ROW] = warmNames[Prefs.warm()];
+            String newVersion = Updater.available(getContext());
+            v[UPDATE_ROW] = !updateStatus.isEmpty() ? updateStatus
+                    : !newVersion.isEmpty() ? (Ui.ru ? "Доступна " : Ui.tr("Nova ", "New ")) + newVersion
+                    : (Ui.ru ? "Версия " : Ui.tr("Versão ", "Version ")) + Updater.installed(getContext()) + (Ui.ru ? " · проверить" : Ui.tr(" · verificar", " · check"));
             // No quotes widget, nowhere to show prices: the coins read as off (and stay locked) until it is back on.
             for (int i = COIN_ROWS; i < v.length; i++) v[i] = onOff(Prefs.quotes() && Prefs.coin(i - COIN_ROWS));
             return v;
@@ -743,6 +754,9 @@ public class SettingsActivity extends Activity {
                 }
                 case 3: Prefs.setWeather(!Prefs.weather()); break;
                 case CITY_ROW: return;
+                case REPORT_ROW: if (dir > 0) showReport(); return;
+                case UPDATE_ROW: if (dir > 0) updateAction(); return;
+                case WARM_ROW: Prefs.setWarm((Prefs.warm() + dir + 4) % 4); return;
                 case 5: Prefs.setQuotes(!Prefs.quotes()); break;
                 case ANIMATION_ROW: Prefs.setAnimation(!Prefs.animation()); break;
                 case SOUNDS_ROW: Prefs.setSounds(!Prefs.sounds()); break;
@@ -755,6 +769,59 @@ public class SettingsActivity extends Activity {
                     break;
             }
             HomeData.get(getContext()).settingsChanged();
+        }
+
+        /** OK on the update row: looks for a newer release, or (when one is known) asks and installs it. */
+        private void updateAction() {
+            if (!updateStatus.isEmpty() && !updateStatus.startsWith(Ui.ru ? "Не вышло" : "Failed")) return;   // already busy
+            String version = Updater.available(getContext());
+            if (version.isEmpty()) {
+                updateStatus = Ui.ru ? "Проверяю…" : Ui.tr("Verificando…", "Checking…");
+                invalidate();
+                new Thread(() -> {
+                    String found = "";
+                    String status;
+                    try {
+                        found = Updater.check(getContext());
+                        status = found.isEmpty() ? (Ui.ru ? "Актуальная версия" : Ui.tr("Versão atual", "Up to date")) : "";
+                    } catch (Exception e) {
+                        AppLog.w("update check: " + e.getMessage());
+                        status = Ui.ru ? "Не вышло проверить" : "Failed to check";
+                    }
+                    String result = status;
+                    handler.post(() -> { updateStatus = result; invalidate(); });
+                }, "update-check").start();
+                return;
+            }
+            new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(Ui.ru ? "Обновление " + version : Ui.tr("Atualização ", "Update ") + version)
+                    .setMessage(Ui.ru ? "Скачать и поставить новую версию? Это займёт около минуты, главный экран на это время перезапустится. Видео лучше поставить на паузу."
+                            : "Download and install the new version? It takes about a minute and the home screen restarts. Pause any video first.")
+                    .setPositiveButton(Ui.ru ? "Установить" : "Install", (d, which) -> {
+                        updateStatus = Ui.ru ? "Устанавливаю…" : "Installing…";
+                        invalidate();
+                        new Thread(() -> {
+                            String status = "";
+                            try {
+                                Updater.install(getContext());   // the app restarts when this succeeds
+                            } catch (Exception e) {
+                                AppLog.w("update: " + e.getMessage());
+                                status = Ui.ru ? "Не вышло: " + e.getMessage() : "Failed: " + e.getMessage();
+                            }
+                            String result = status;
+                            handler.post(() -> { updateStatus = result; invalidate(); });
+                        }, "update-install").start();
+                    })
+                    .setNegativeButton(Ui.ru ? "Не сейчас" : Ui.tr("Agora não", "Not now"), null)
+                    .show();
+        }
+
+        private void showReport() {
+            new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(Ui.ru ? "Отчёт за неделю" : Ui.tr("Relatório da semana", "Weekly report"))
+                    .setMessage(Health.report(getContext()))
+                    .setPositiveButton("OK", null)
+                    .show();
         }
 
         private void askCity() {

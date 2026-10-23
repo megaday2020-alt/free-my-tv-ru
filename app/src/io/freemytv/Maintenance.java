@@ -46,6 +46,12 @@ final class Maintenance {
 
     /** The work itself (on a background thread, from ModeJob). `allowRestart` false = caches only (for tests). */
     static void runNow(Context c, boolean allowRestart) {
+        try {
+            Updater.check(c);   // only looks; installing is always the person's choice in Settings
+        } catch (Exception e) {
+            AppLog.w("update check: " + e.getMessage());
+        }
+        if (Prefs.warm() > 0) WarmScreen.apply(c);   // sunset and sunrise move a little every day
         try (Adb adb = Adb.connect(c, 5_000, null)) {
             String top = adb.shell("dumpsys activity activities | grep mResumedActivity");
             if (!top.contains(HomeMode.PKG + "/")) {

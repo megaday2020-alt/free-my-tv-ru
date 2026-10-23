@@ -312,7 +312,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private String weatherTitle, nowTemp, highLow, sunriseText, sunsetText, staleText;
     private final String[] hourText = new String[6], hourTempText = new String[6];
     private final String[] dayText = new String[6], dayTempText = new String[6];
-    private long textDayStart;
+    private long textDayStart, staleMinute = -1, staleAt = -1;
+    private boolean staleWeather, updateDot;
     private final String[] priceText = new String[HomeData.COINS.length], changeText = new String[HomeData.COINS.length];
 
     /** What the hero shows: a recommendation or, without any, the date, the time and the weather. */
@@ -2950,6 +2951,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                         || (!Float.isNaN(result) && Math.round(result) != Math.round(tempC));
                 tempC = result;
                 tempBusy = false;
+                if (!Float.isNaN(result)) Health.temperature(getContext(), result);
                 if (changed) {
                     statusDirty = true;
                     status.invalidate();
@@ -2966,6 +2968,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float gap = 28 * k, x = topRects[3].left - gap, cy = topRects[3].centerY();
         lStatus.setColor(ink);
         fill.setShader(null);
+        if (updateDot) {   // a new version is waiting: a small amber dot on the settings button
+            fill.setColor(0xFFFF9F0A);
+            c.drawCircle(topRects[3].right - 8 * k, topRects[3].top + 8 * k, 7 * k, fill);
+        }
         if (!Float.isNaN(tempC)) {
             String t = Math.round(tempC) + "°C";
             float w = lStatus.measureText(t);
@@ -3146,6 +3152,26 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             Symbols.draw(getContext(), c, sym, fx + w / 2, fbase - Ui.halfCap(lWeather), fsize, lWeather.getColor());
             c.drawText(forecastLine[d], fx + w + 12 * k, fbase, lWeather);
             fx += w + 12 * k + lWeather.measureText(forecastLine[d]) + gap;
+        }
+        // Old data: a small note with the time of the last update, so a stale forecast is not taken for a fresh one.
+        long minute = System.currentTimeMillis() / 60_000;
+        if (minute != staleMinute || data.weatherAt != staleAt) {
+            staleMinute = minute;
+            staleAt = data.weatherAt;
+            staleWeather = data.weatherAt > 0 && System.currentTimeMillis() - data.weatherAt > 3 * 3_600_000L;
+            boolean dot = !Updater.available(getContext()).isEmpty();
+            if (dot != updateDot) { updateDot = dot; statusDirty = true; status.invalidate(); }
+        }
+        if (staleWeather) {   // a small clock: the numbers above are old
+            float r = 11 * k, cx = fx + r, cy = fbase - Ui.halfCap(lWeather);
+            fitPaint.set(lWeather);
+            fitPaint.setStyle(Paint.Style.STROKE);
+            fitPaint.setStrokeWidth(2.6f * k);
+            fitPaint.setStrokeCap(Paint.Cap.ROUND);
+            fitPaint.setAlpha(160);
+            c.drawCircle(cx, cy, r, fitPaint);
+            c.drawLine(cx, cy, cx, cy - r * 0.62f, fitPaint);
+            c.drawLine(cx, cy, cx + r * 0.48f, cy + r * 0.2f, fitPaint);
         }
         // Rain or snow soon, in Yandex's words, on a line of its own (only when something is expected).
         if (!nowLine.isEmpty()) {

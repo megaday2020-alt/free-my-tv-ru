@@ -165,6 +165,7 @@ final class VpnServers {
                     AppLog.w("vpn servers: choosing \"" + choice.title + "\" " + choice.ping + " ms (" + why + ")");
                     if (select(choice)) {
                         sp.edit().putString("current", choice.title).apply();
+                        Health.count(c, "switches");
                         SystemClock.sleep(6_000);
                         AppLog.w("vpn servers: VPN is " + (VpnGuard.vpnUp(c) ? "up" : "DOWN") + " after the switch");
                     }

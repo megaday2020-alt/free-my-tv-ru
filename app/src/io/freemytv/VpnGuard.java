@@ -134,11 +134,13 @@ final class VpnGuard {
         AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         long now = System.currentTimeMillis();
         if (vpnUp(c)) {
+            if (sp.getLong("downSince", 0) != 0) Health.count(c, "restores");
             sp.edit().putLong("downSince", 0).putInt("tries", 0).putBoolean("fellBack", false).apply();
             return;
         }
         long down = sp.getLong("downSince", 0);
         if (down == 0) {
+            Health.count(c, "drops");
             sp.edit().putLong("downSince", now).apply();
             if (am != null) arm(am, intent(c, 80, ACTION, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE), now + QUICK);
             return;
