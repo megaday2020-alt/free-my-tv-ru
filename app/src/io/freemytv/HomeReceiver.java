@@ -17,6 +17,7 @@ public class HomeReceiver extends BroadcastReceiver {
             VpnGuard.schedule(context);
             VpnServers.schedule(context);
         } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
+            Updater.announce(context);   // an update started from Settings: say it is done
             HomeMode.verify(context);   // app updated: complete Free My TV mode if something is missing
             HomeMode.ensureRemoteService(context, 3_000);
             ModeJob.schedule(context, ModeJob.MEMORY, HomeMode.FREE, 120_000);   // refresh the numbers on the settings screen

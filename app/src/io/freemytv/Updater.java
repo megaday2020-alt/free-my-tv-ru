@@ -49,6 +49,26 @@ final class Updater {
         return sp(c).getLong("checkedAt", 0) > 0;
     }
 
+    /** After an update started here, a short message that it finished (shown over whatever is on the screen). */
+    static void announce(Context c) {
+        SharedPreferences sp = sp(c);
+        String version = sp.getString("notify", "");
+        // The older version that started the update left no note, but its downloaded file stays behind.
+        File dir = c.getExternalFilesDir(null);
+        File leftover = dir == null ? null : new File(dir, "update.apk");
+        if (leftover != null && leftover.exists()) {
+            leftover.delete();
+            if (version.isEmpty()) version = installed(c);
+        }
+        if (version.isEmpty()) return;
+        sp.edit().remove("notify").apply();
+        if (!version.equals(installed(c))) return;
+        String lang = Prefs.language();
+        boolean ru = lang.equals("ru") || lang.equals("auto") && java.util.Locale.getDefault().getLanguage().equals("ru");
+        android.widget.Toast.makeText(c.getApplicationContext(),
+                (ru ? "Free My TV обновлён до версии " : "Free My TV updated to version ") + version, android.widget.Toast.LENGTH_LONG).show();
+    }
+
     /** "1.10" is newer than "1.9": compares the dotted numbers one by one. */
     static boolean newer(String a, String b) {
         String[] x = a.replaceAll("[^0-9.]", "").split("\\."), y = b.replaceAll("[^0-9.]", "").split("\\.");
@@ -90,6 +110,7 @@ final class Updater {
             if (apk.length() < 200_000 || f.readByte() != 'P' || f.readByte() != 'K') throw new IOException("the file is not an APK");
         }
         AppLog.w("update: installing " + available(c));
+        sp(c).edit().putString("notify", available(c)).apply();   // the restarted app says the update is done
         try (Adb adb = Adb.connect(c, 5_000, null)) {
             String out = adb.shell("pm install -r " + apk.getAbsolutePath());
             AppLog.w("update: " + out.trim());
