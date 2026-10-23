@@ -127,6 +127,7 @@ final class VpnServers {
                 back(adb, before);
                 return;
             }
+            V2RayService.banner(Ui.ru ? "Идёт выбор сервера VPN, около минуты. Пока не нажимайте кнопки пульта" : "Picking the VPN server, about a minute. Please do not press the remote for now");
             SystemClock.sleep(1500);
             debugDump("V2RayTun opened");
             try {
@@ -169,6 +170,7 @@ final class VpnServers {
                     }
                 }
             } finally {
+                V2RayService.banner(null);
                 back(adb, before);
             }
         }
@@ -371,8 +373,8 @@ final class VpnServers {
     /** One swipe on the server list: forward = towards the bottom of the list. Returns false when the shell failed. */
     private static boolean scroll(boolean forward) {
         try {
-            sh.shell(forward ? "input swipe 430 640 430 240 450" : "input swipe 430 240 430 640 250");
-            SystemClock.sleep(forward ? 600 : 350);
+            sh.shell(forward ? "input swipe 430 650 430 140 650" : "input swipe 430 140 430 650 450");   // one long, slow swipe at a time
+            SystemClock.sleep(forward ? 800 : 600);
             return true;
         } catch (java.io.IOException e) {
             return false;
@@ -380,8 +382,8 @@ final class VpnServers {
     }
 
     private static void toTop() {
-        for (int i = 0; i < 14 && scroll(false); i++) {}
-        SystemClock.sleep(400);
+        for (int i = 0; i < 14 && findText("КОНФИГУРАЦИИ") == null && scroll(false); i++) {}   // stop as soon as the top is on the screen
+        SystemClock.sleep(500);
     }
 
     /** The whole list, top to bottom (a row keeps the newest time it was seen with). */
