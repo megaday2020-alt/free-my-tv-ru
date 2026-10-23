@@ -312,6 +312,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private String weatherTitle, nowTemp, highLow, sunriseText, sunsetText, staleText;
     private final String[] hourText = new String[6], hourTempText = new String[6];
     private final String[] dayText = new String[6], dayTempText = new String[6];
+    private long textDayStart;
     private final String[] priceText = new String[HomeData.COINS.length], changeText = new String[HomeData.COINS.length];
 
     /** What the hero shows: a recommendation or, without any, the date, the time and the weather. */
@@ -1673,18 +1674,21 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean settings = Prefs.version != textPrefs || !Ui.language.equals(textLanguage);
         textPrefs = Prefs.version;
         textLanguage = Ui.language;
-        if (wx != textWeather || settings) {
+        long dayStart = HomeData.todayStart();
+        if (wx != textWeather || settings || dayStart != textDayStart) {
             textWeather = wx;
+            textDayStart = dayStart;
             weatherTitle = Prefs.city().isEmpty() ? Ui.tr("Clima", "Weather") : Prefs.city();
             nowTemp = HomeData.degrees(wx.temp);
             double dayTemp = Double.isNaN(wx.dayTemp) ? wx.max : wx.dayTemp;
             highLow = (Ui.ru ? "Днём " : Ui.en ? "Day " : Ui.de ? "Tags " : "Dia ") + HomeData.degrees(dayTemp);
             for (int i = 0; i < 6; i++) {
-                if (Double.isNaN(wx.fcMax[i]) || wx.fcCode[i] < 0) { dayTempText[i] = null; continue; }
+                if (Double.isNaN(wx.fcMax[i]) || wx.fcCode[i] < 0 || wx.fcAt[i] < dayStart) { dayTempText[i] = null; continue; }   // not yesterday's
                 String name = new java.text.SimpleDateFormat("EEE", Ui.locale()).format(new java.util.Date(wx.fcAt[i] + 12 * 3_600_000L));
                 name = name.isEmpty() ? name : name.substring(0, 1).toUpperCase(Ui.locale()) + name.substring(1);
-                dayText[i] = i == 0 ? (Ui.ru ? "Сегодня" : Ui.en ? "Today" : Ui.es ? "Hoy" : Ui.de ? "Heute" : "Hoje") : name;
-                dayTempText[i] = i == 0 ? HomeData.degrees(dayTemp)   // today: the one daytime temperature
+                boolean isToday = wx.fcAt[i] == dayStart;
+                dayText[i] = isToday ? (Ui.ru ? "Сегодня" : Ui.en ? "Today" : Ui.es ? "Hoy" : Ui.de ? "Heute" : "Hoje") : name;
+                dayTempText[i] = isToday ? HomeData.degrees(dayTemp)   // today: the one daytime temperature
                         : HomeData.degrees(wx.fcMax[i]) + " / " + HomeData.degrees(wx.fcMin[i]);
             }
             sunriseText = Ui.tr("Nascer ", "Sunrise ") + Ui.time(wx.sunrise);

@@ -194,7 +194,8 @@ final class HomeData {
                 }
             });
         }
-        if (!fetchingWeather && (now - weatherAt > WEATHER_EVERY || now < weatherAt) && !failedRecently(weatherFailedAt, now)) {
+        // A new day also makes the forecast stale: its first day would still be yesterday.
+        if (!fetchingWeather && (now - weatherAt > WEATHER_EVERY || now < weatherAt || weather.fcAt[0] != todayStart()) && !failedRecently(weatherFailedAt, now)) {
             fetchingWeather = true;
             io.execute(() -> {
                 try {
@@ -352,6 +353,8 @@ final class HomeData {
         }
     }
 
+    static long todayStart() { return midnight(System.currentTimeMillis(), TimeZone.getDefault()); }
+
     private static long midnight(long t, TimeZone zone) {
         java.util.Calendar c = java.util.Calendar.getInstance(zone);
         c.setTimeInMillis(t);
@@ -443,7 +446,19 @@ final class HomeData {
 
     /** The page as a browser would get it (about 1.3 MB, compressed in transit). */
     private static String getPage(String url) throws IOException {
-        HttpURLConnection c = open(url);
+        IOException last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return getPage(url, attempt);
+            } catch (IOException e) {
+                last = e;
+            }
+        }
+        throw last;
+    }
+
+    private static String getPage(String url, int attempt) throws IOException {
+        HttpURLConnection c = open(url, attempt);
         c.setConnectTimeout(8000);
         c.setReadTimeout(12000);
         c.setRequestProperty("User-Agent", BROWSER_UA);
@@ -638,23 +653,39 @@ final class HomeData {
      * Weather and the rest go over the real network (Wi-Fi or cable), never through the VPN, even though Free My TV is
      * among the apps the VPN carries (that is what lets the VPN indicator test the real path).
      */
-    private static HttpURLConnection open(String url) throws IOException {
+    private static HttpURLConnection open(String url, int attempt) throws IOException {
         URL u = new URL(url);
         try {
             android.net.ConnectivityManager cm = (android.net.ConnectivityManager) appCtx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            int seen = 0;
             for (android.net.Network n : cm.getAllNetworks()) {
                 android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                // Only a network that works: after a Wi-Fi roam an old one can linger, and binding to it fails with EPERM.
                 if (nc != null && !nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)
-                        && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                        && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                        && seen++ == attempt) {
                     return (HttpURLConnection) n.openConnection(u);
                 }
             }
         } catch (RuntimeException ignored) {}
-        return (HttpURLConnection) u.openConnection();
+        return (HttpURLConnection) u.openConnection();   // the default network, when no other is left to try
     }
 
     private static String get(String url) throws IOException {
-        HttpURLConnection c = open(url);
+        IOException last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return get(url, attempt);
+            } catch (IOException e) {
+                last = e;
+            }
+        }
+        throw last;
+    }
+
+    private static String get(String url, int attempt) throws IOException {
+        HttpURLConnection c = open(url, attempt);
         c.setConnectTimeout(6000);
         c.setReadTimeout(6000);
         c.setRequestProperty("User-Agent", USER_AGENT);
