@@ -330,6 +330,14 @@ public class SettingsActivity extends Activity {
             return HomeMode.FREE.equals(state.optString("mode")) && !state.optBoolean("homeReverted");
         }
 
+        /** Home Settings has more rows than fit: ten show at a time and the window follows the focus. */
+        private static final int HOME_VISIBLE = 10;
+
+        private int homeTop() {
+            if (screen != HOME_SETTINGS) return 0;
+            return Math.max(0, Math.min(focus - 5, settingLabels().length - HOME_VISIBLE));
+        }
+
         private int rowCount() {
             switch (screen) {
                 case MAIN: return 6;
@@ -346,8 +354,9 @@ public class SettingsActivity extends Activity {
             long now = System.nanoTime();
             float dt = lastNanos == 0 ? 1 / 60f : Math.min(0.05f, (now - lastNanos) / 1e9f);
             lastNanos = now;
+            int top = homeTop();
             for (int i = 0; i < pop.length; i++) {
-                pop[i].target = i == focus && i < rowCount() ? 1 : 0;
+                pop[i].target = i + top == focus && i + top < rowCount() ? 1 : 0;
                 pop[i].step(dt);
             }
             long up = SystemClock.uptimeMillis();
@@ -1008,10 +1017,11 @@ public class SettingsActivity extends Activity {
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
             c.drawText(keys ? Ui.tr("Botões do Controle", "Remote Buttons") : Ui.tr("Ajustes do Início", "Home Settings"),
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
-            for (int i = 0; i < labels.length; i++) {
-                float y = (LIST_TOP + 20 + i * (LIST_ROW_H + LIST_ROW_GAP)) * k;
+            int top = homeTop(), shown = Math.min(labels.length - top, HOME_VISIBLE);
+            for (int i = top; i < top + shown; i++) {
+                float y = (LIST_TOP + 20 + (i - top) * (LIST_ROW_H + LIST_ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
-                float f = drawRowBackground(c, i);
+                float f = drawRowBackground(c, i - top);
                 rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
                 boolean locked = !keys && i >= COIN_ROWS && !Prefs.quotes();
                 rowValue.setColor(blend(locked ? 0x59FFFFFF : 0xB3FFFFFF, locked ? 0x591C1C1E : 0xB31C1C1E, f));
@@ -1021,8 +1031,9 @@ public class SettingsActivity extends Activity {
                 c.drawText(values[i], rowRect.right - 30 * k, base, rowValue);
             }
             Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
-            float hy = (LIST_TOP + 20 + labels.length * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
-            c.drawText(Ui.tr("OK ou as setas mudam o valor.", "OK or the arrows change the value."), LIST_X * k + 30 * k, hy, hint);
+            float hy = (LIST_TOP + 20 + shown * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
+            c.drawText((labels.length > shown ? (focus + 1) + " / " + labels.length + "  ·  " : "")
+                    + Ui.tr("OK ou as setas mudam o valor.", "OK or the arrows change the value."), LIST_X * k + 30 * k, hy, hint);
             if (keys) {
                 c.drawText(RemoteKeys.VESTEL ? Ui.tr("YouTube, Prime Video e Google Play: a própria TV controla esses botões.",
                         "YouTube, Prime Video and Google Play: the TV itself controls those buttons.")
