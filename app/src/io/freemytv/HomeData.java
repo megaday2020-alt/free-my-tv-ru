@@ -50,7 +50,7 @@ final class HomeData {
         } catch (NumberFormatException ignored) {}
         return "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=" + lat + "&lon=" + lon;
     }
-    private static final long PRICES_EVERY = 5 * 60_000L, WEATHER_EVERY = 30 * 60_000L;
+    private static final long PRICES_EVERY = 5 * 60_000L, WEATHER_EVERY = 15 * 60_000L;
     interface Listener { void onData(); }
 
     /** BTC, ETH and SOL; in Brazilian reais also the dollar (USDT/BRL), which Binance doesn't list for most currencies. */
@@ -602,8 +602,8 @@ final class HomeData {
         if (p.contains("морос")) return 51;                             // морось
         if (p.contains("дожд")) return p.contains("сильн") ? 65 : p.contains("небольш") ? 61 : 63;   // дождь
         if (p.contains("пасмур")) return 3;                        // пасмурно
-        if (p.contains("проясн")) return 3;                        // облачно с прояснениями
-        if (p.contains("малооблач")) return 2;      // малооблачно
+        if (p.contains("проясн") || p.contains("переменн")) return 2;   // облачно с прояснениями, переменная облачность
+        if (p.contains("малооблач")) return 1;      // малооблачно
         if (p.contains("облач")) return 3;                              // облачно
         if (p.contains("ясно")) return 0;                                    // ясно
         return -1;
@@ -634,8 +634,9 @@ final class HomeData {
         if (c.contains("THUNDER")) return 95;
         switch (c) {
             case "CLEAR": return 0;
-            case "PARTLY_CLOUDY": return 2;
-            case "CLOUDY": case "OVERCAST": return 3;
+            case "PARTLY_CLOUDY": return 1;   // малооблачно
+            case "CLOUDY": return 2;           // переменная облачность (облачно с прояснениями)
+            case "OVERCAST": return 3;         // пасмурно
             case "DRIZZLE": return 51;
             case "LIGHT_RAIN": return 61;
             case "RAIN": case "MODERATE_RAIN": return 63;

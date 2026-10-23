@@ -133,7 +133,7 @@ final class Prefs {
     static void setWarm(int level) {
         sp().edit().putInt("warm", level).apply();
         version++;
-        new Thread(() -> WarmScreen.apply(app), "warm-screen").start();
+        new Thread(() -> WarmScreen.apply(app, true), "warm-screen").start();
     }
 
     /** Picks the best VPN server in V2RayTun by itself when nobody uses the box (on; turn it off in the settings). */

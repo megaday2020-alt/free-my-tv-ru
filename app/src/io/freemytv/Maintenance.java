@@ -51,7 +51,7 @@ final class Maintenance {
         } catch (Exception e) {
             AppLog.w("update check: " + e.getMessage());
         }
-        if (Prefs.warm() > 0) WarmScreen.apply(c);   // sunset and sunrise move a little every day
+        if (Prefs.warm() > 0) WarmScreen.apply(c, false);   // sunset and sunrise move a little every day
         try (Adb adb = Adb.connect(c, 5_000, null)) {
             String top = adb.shell("dumpsys activity activities | grep mResumedActivity");
             if (!top.contains(HomeMode.PKG + "/")) {
