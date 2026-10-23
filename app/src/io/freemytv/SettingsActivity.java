@@ -684,8 +684,7 @@ public class SettingsActivity extends Activity {
             v[VPN_GUARD_ROW] = onOff(Prefs.vpnGuard());
             v[SERVER_ROW] = onOff(Prefs.serverPick());
             v[REPORT_ROW] = Ui.ru ? "Показать" : Ui.tr("Mostrar", "Show");
-            String[] warmNames = Ui.ru ? new String[] {"Выкл", "Мягко", "Средне", "Сильно"} : new String[] {"Off", "Soft", "Medium", "Strong"};
-            v[WARM_ROW] = warmNames[Prefs.warm()];
+            v[WARM_ROW] = onOff(Prefs.warm() > 0);
             String newVersion = Updater.available(getContext());
             v[UPDATE_ROW] = !updateStatus.isEmpty() ? updateStatus
                     : !newVersion.isEmpty() ? (Ui.ru ? "Доступна " : Ui.tr("Nova ", "New ")) + newVersion
@@ -765,7 +764,7 @@ public class SettingsActivity extends Activity {
                 case CITY_ROW: return;
                 case REPORT_ROW: if (dir > 0) showReport(); return;
                 case UPDATE_ROW: if (dir > 0) updateAction(); return;
-                case WARM_ROW: Prefs.setWarm((Prefs.warm() + dir + 4) % 4); return;
+                case WARM_ROW: Prefs.setWarm(Prefs.warm() > 0 ? 0 : 1); return;
                 case 5: Prefs.setQuotes(!Prefs.quotes()); break;
                 case ANIMATION_ROW: Prefs.setAnimation(!Prefs.animation()); break;
                 case SOUNDS_ROW: Prefs.setSounds(!Prefs.sounds()); break;

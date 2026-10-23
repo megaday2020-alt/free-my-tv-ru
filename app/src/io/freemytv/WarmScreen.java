@@ -10,8 +10,10 @@ import android.os.SystemClock;
 final class WarmScreen {
     private WarmScreen() {}
 
-    /** Colour temperature per level: off, soft, medium, strong (Android's range is about 2600 to 4000 K; 3300 was too strong). */
-    static final int[] KELVIN = {0, 4000, 3700, 3300};
+    /**
+     * One gentle level (Android's night light can't go weaker than about 4000 K: it clamps, checked on the box; 3300 K was too strong).
+     */
+    static final int[] KELVIN = {0, 4000};
     private static final long PREVIEW_MS = 20_000;
     private static volatile long previewToken;
 
