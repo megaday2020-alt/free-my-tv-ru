@@ -590,7 +590,7 @@ public class SettingsActivity extends Activity {
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         invalidate();
-                    } else if (down && screen == HOME_SETTINGS) {
+                    } else if (down && screen == HOME_SETTINGS && !isSwitch(rows()[focus])) {   // arrows change a choice, never flip a switch by accident
                         adjust(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         invalidate();
                     }
@@ -649,6 +649,12 @@ public class SettingsActivity extends Activity {
                 {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
         private int group;
         private String updateStatus = "";
+
+        /** On/off rows: only OK flips them (a stray arrow key must not). */
+        private static boolean isSwitch(int id) {
+            return id == WEATHER_ROW || id == ANIMATION_ROW || id == SOUNDS_ROW || id == MAINTENANCE_ROW || id == VPN_GUARD_ROW
+                    || id == SERVER_ROW || id == WARM_ROW;
+        }
 
         private int[] rows() {
             return GROUP_ROWS[Math.max(0, Math.min(group, GROUP_ROWS.length - 1))];

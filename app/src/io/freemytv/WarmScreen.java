@@ -37,11 +37,21 @@ final class WarmScreen {
             adb.shell("settings put secure night_display_activated 1");
             SystemClock.sleep(PREVIEW_MS);
             if (token != previewToken) return;   // another change came in: it takes over
-            adb.shell("settings put secure night_display_auto_mode 0; settings put secure night_display_activated 0; "
-                    + "settings put secure night_display_auto_mode 1");   // back to the schedule
+            // Back to the schedule. Switching the schedule on does not turn the light on by itself, so it is set by the clock:
+            // at night it stays on (the person wanted it), by day it goes off.
+            adb.shell("settings put secure night_display_auto_mode 0; settings put secure night_display_activated " + (isNightNow(c) ? 1 : 0)
+                    + "; settings put secure night_display_auto_mode 1");
         } catch (Exception e) {
             AppLog.w("warm screen: " + e.getMessage());
         }
+    }
+
+    /** True between sunset and sunrise by the clock (the same window that was written as the schedule). */
+    private static boolean isNightNow(Context c) {
+        HomeData.Weather wx = HomeData.get(c).weather;
+        long rise = Shaders.timeOfDay(wx.sunrise, 6 * 60 * 60_000L), set = Shaders.timeOfDay(wx.sunset, 18 * 60 * 60_000L);
+        long now = Shaders.timeOfDay(System.currentTimeMillis(), 0);
+        return set > rise ? (now >= set || now < rise) : (now >= set && now < rise);
     }
 
     private static String schedule(Context c, int level) {
