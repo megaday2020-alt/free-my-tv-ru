@@ -58,7 +58,7 @@ final class HomeApps {
     /** The "HDMI Inputs" button: opens the bottom drawer on the inputs (the home screen handles it). */
     static final int INPUTS = 7;
     /** Quick actions in the bottom drawer (run through the TV's own ADB by the home screen). */
-    static final int REBOOT = 8, SLEEP = 9, CLEAN = 10, SLEEP_TIMER = 11, SERVER_PICK = 12;
+    static final int REBOOT = 8, SLEEP = 9, CLEAN = 10, SLEEP_TIMER = 11, SERVER_PICK = 12, NET_CHECK = 13;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -232,6 +232,7 @@ final class HomeApps {
         items.add(shortcut(SLEEP, "sleep", Ui.ru ? "Ночные часы" : Ui.tr("Relógio noturno", "Night clock"), "bedtime"));
         items.add(shortcut(SLEEP_TIMER, "sleeptimer", Ui.ru ? "Таймер сна" : Ui.tr("Temporizador", "Sleep timer"), "bell"));
         items.add(shortcut(SERVER_PICK, "serverpick", Ui.ru ? "Сервер VPN" : Ui.tr("Servidor VPN", "VPN server"), "check"));
+        items.add(shortcut(NET_CHECK, "netcheck", Ui.ru ? "Проверить сеть" : Ui.tr("Testar a rede", "Check network"), "wifi"));
         items.add(shortcut(CLEAN, "clean", Ui.ru ? "Очистить кэш" : Ui.tr("Limpar cache", "Clear cache"), "sparkles"));
         items.add(shortcut(REBOOT, "reboot", Ui.ru ? "Перезагрузить" : Ui.tr("Reiniciar", "Restart"), "sync"));
         return items;

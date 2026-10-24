@@ -2283,7 +2283,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             retarget(false);
             return;
         }
-        if (it.kind == HomeApps.REBOOT || it.kind == HomeApps.SLEEP || it.kind == HomeApps.CLEAN || it.kind == HomeApps.SLEEP_TIMER || it.kind == HomeApps.SERVER_PICK) {
+        if (it.kind == HomeApps.REBOOT || it.kind == HomeApps.SLEEP || it.kind == HomeApps.CLEAN || it.kind == HomeApps.SLEEP_TIMER || it.kind == HomeApps.SERVER_PICK || it.kind == HomeApps.NET_CHECK) {
             quickAction(it);
             return;
         }
@@ -2301,6 +2301,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (it.kind == HomeApps.SERVER_PICK) {   // check the VPN servers now and switch to the best one
             ModeJob.schedule(getContext(), ModeJob.SERVERS, "manual", 0);
             showToast(Ui.ru ? "Проверяю серверы VPN, это займёт около минуты" : Ui.tr("Verificando os servidores VPN…", "Checking the VPN servers, about a minute"));
+            return;
+        }
+        if (it.kind == HomeApps.NET_CHECK) {   // Wi-Fi, router, internet and VPN in one panel
+            activity.startActivity(new android.content.Intent(activity, NetCheckActivity.class));
             return;
         }
         if (it.kind == HomeApps.SLEEP_TIMER) {   // a small menu: how long until the night clock
