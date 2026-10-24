@@ -113,7 +113,7 @@ public class SettingsActivity extends Activity {
     }
 
     static final class SettingsView extends View implements Choreographer.FrameCallback {
-        private static final int MAIN = 0, HOME_CHOICE = 1, HOME_SETTINGS = 2, REMOTE_KEYS = 3, PICKER = 4, SHELF_EDIT = 5;
+        private static final int MAIN = 0, HOME_CHOICE = 1, HOME_SETTINGS = 2, REMOTE_KEYS = 3, PICKER = 4, SHELF_EDIT = 5, HOME_GROUPS = 6;
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_H = 74, ROW_GAP = 8, CHOICE_H = 104;
@@ -219,10 +219,10 @@ public class SettingsActivity extends Activity {
                     boolean inUse = (row == 0) == freeActive();
                     return name + (inUse ? Ui.tr(". Em uso", ". In use") : "") + ", " + (row + 1) + Ui.tr(" de 2", " of 2");
                 }
+                case HOME_GROUPS:
                 case HOME_SETTINGS:
                 case REMOTE_KEYS: {
-                    boolean keys = screen == REMOTE_KEYS;
-                    String[] labels = keys ? keyLabels() : settingLabels(), values = keys ? keyValues() : settingValues();
+                    String[] labels = labelsNow(), values = valuesNow();
                     return row < labels.length ? labels[row] + ", " + values[row] : "";
                 }
                 case PICKER: {
@@ -343,6 +343,7 @@ public class SettingsActivity extends Activity {
                 case MAIN: return 6;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return settingLabels().length;
+                case HOME_GROUPS: return GROUP_ROWS.length;
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
                 case SHELF_EDIT: return Math.min(PICK_VISIBLE, shelfRows.size());
                 default: return Prefs.KEYS.length;
@@ -611,13 +612,17 @@ public class SettingsActivity extends Activity {
                     } else {
                         if (backDown && !e.isCanceled()) {
                             if (screen == PICKER && pickFor == PICK_CITY) {
-                                focus = CITY_ROW;
+                                group = 1;
+                                focus = rowOf(CITY_ROW);
                                 screen = HOME_SETTINGS;
                             } else if (screen == PICKER) {
                                 focus = pickFor - 1;
                                 screen = REMOTE_KEYS;
+                            } else if (screen == HOME_SETTINGS) {
+                                focus = group;   // back to the list of groups, on the one just left
+                                screen = HOME_GROUPS;
                             } else {
-                                focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? 3 : screen == REMOTE_KEYS ? 4 : 0;
+                                focus = screen == HOME_GROUPS ? 2 : screen == SHELF_EDIT ? 3 : screen == REMOTE_KEYS ? 4 : 0;
                                 screen = MAIN;
                             }
                         }
@@ -634,65 +639,109 @@ public class SettingsActivity extends Activity {
         // MARK: - Home Settings and Remote Buttons
 
         private static final String[] LANGUAGES = {"auto", "pt", "en", "es", "de", "ru"}, UNITS = {"auto", "C", "F"}, THEMES = {"auto", "light", "dark"};
-        /** Home Settings: language, temperature, theme, weather, quotes, then one row per coin. */
-        private static final int CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7, MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, LOG_ROW = 14, COIN_ROWS = 15;
+        // Home Settings are grouped: the list of groups (HOME_GROUPS), then the rows of one group (HOME_SETTINGS).
+        private static final int LANG_ROW = 0, TEMP_ROW = 1, THEME_ROW = 2, WEATHER_ROW = 3, CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7,
+                MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, LOG_ROW = 14;
+        private static final int[][] GROUP_ROWS = {
+                {LANG_ROW, TEMP_ROW, THEME_ROW, ANIMATION_ROW, SOUNDS_ROW, WARM_ROW},   // look
+                {WEATHER_ROW, CITY_ROW},                                                // weather
+                {VPN_GUARD_ROW, SERVER_ROW, MAINTENANCE_ROW},                           // VPN and upkeep
+                {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
+        private int group;
         private String updateStatus = "";
 
-        private boolean dollar() {
-            return "BRL".equalsIgnoreCase(Config.CURRENCY.trim());
+        private int[] rows() {
+            return GROUP_ROWS[Math.max(0, Math.min(group, GROUP_ROWS.length - 1))];
+        }
+
+        /** The place of a setting in the group on screen (0 when it is not there). */
+        private int rowOf(int id) {
+            int[] r = rows();
+            for (int i = 0; i < r.length; i++) if (r[i] == id) return i;
+            return 0;
+        }
+
+        private String[] groupLabels() {
+            return Ui.ru ? new String[] {"Вид", "Погода", "VPN и обслуживание", "Приложение"}
+                    : new String[] {Ui.tr("Aparência", "Look"), Ui.tr("Clima", "Weather"), Ui.tr("VPN e manutenção", "VPN and upkeep"), Ui.tr("Aplicativo", "App")};
+        }
+
+        private String[] groupValues() {
+            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "страж, серверы", "обновление, журнал"}
+                    : new String[] {"language, theme, animation", "widget, city", "guard, servers", "update, log"};
+        }
+
+        private String[] labelsNow() {
+            return screen == REMOTE_KEYS ? keyLabels() : screen == HOME_GROUPS ? groupLabels() : settingLabels();
+        }
+
+        private String[] valuesNow() {
+            return screen == REMOTE_KEYS ? keyValues() : screen == HOME_GROUPS ? groupValues() : settingValues();
+        }
+
+        private String labelOf(int id) {
+            switch (id) {
+                case LANG_ROW: return Ui.tr("Idioma", "Language");
+                case TEMP_ROW: return Ui.tr("Temperatura", "Temperature");
+                case THEME_ROW: return Ui.tr("Tema", "Theme");
+                case WEATHER_ROW: return Ui.tr("Widget do clima", "Weather widget");
+                case CITY_ROW: return Ui.tr("Cidade", "City");
+                case ANIMATION_ROW: return Ui.ru ? "Анимация фона" : Ui.tr("Animação de fundo", "Background animation");
+                case SOUNDS_ROW: return Ui.ru ? "Звуки щелчков" : Ui.tr("Sons de clique", "Click sounds");
+                case MAINTENANCE_ROW: return Ui.ru ? "Ночное обслуживание" : Ui.tr("Manutenção noturna", "Night maintenance");
+                case VPN_GUARD_ROW: return Ui.ru ? "Страж VPN" : Ui.tr("Guarda da VPN", "VPN guard");
+                case SERVER_ROW: return Ui.ru ? "Выбор сервера VPN" : Ui.tr("Servidor da VPN", "VPN server picker");
+                case REPORT_ROW: return Ui.ru ? "Отчёт за неделю" : Ui.tr("Relatório da semana", "Weekly report");
+                case UPDATE_ROW: return Ui.ru ? "Обновление приложения" : Ui.tr("Atualização", "App update");
+                case WARM_ROW: return Ui.ru ? "Тёплый экран вечером" : Ui.tr("Tela quente à noite", "Warm screen at night");
+                default: return Ui.ru ? "Журнал событий" : Ui.tr("Registro de eventos", "Event log");
+            }
+        }
+
+        private String valueOf(int id) {
+            switch (id) {
+                case LANG_ROW: {
+                    String lang = Prefs.language();
+                    return lang.equals("pt") ? "Português" : lang.equals("en") ? "English" : lang.equals("es") ? "Español"
+                            : lang.equals("de") ? "Deutsch" : lang.equals("ru") ? "Русский" : Ui.tr("Automático", "Automatic");
+                }
+                case TEMP_ROW: {
+                    String unit = Prefs.temperature();
+                    return unit.equals("C") ? "°C" : unit.equals("F") ? "°F" : Ui.tr("Automática", "Automatic");
+                }
+                case THEME_ROW: {
+                    String theme = Prefs.theme();
+                    return theme.equals("light") ? Ui.tr("Claro", "Light") : theme.equals("dark") ? Ui.tr("Escuro", "Dark") : Ui.tr("Automático", "Automatic");
+                }
+                case WEATHER_ROW: return onOff(Prefs.weather());
+                case CITY_ROW: return !cityStatus.isEmpty() ? cityStatus : Prefs.city().isEmpty() ? "—" : Prefs.city();
+                case ANIMATION_ROW: return onOff(Prefs.animation());
+                case SOUNDS_ROW: return onOff(Prefs.sounds());
+                case MAINTENANCE_ROW: return onOff(Prefs.maintenance());
+                case VPN_GUARD_ROW: return onOff(Prefs.vpnGuard());
+                case SERVER_ROW: return onOff(Prefs.serverPick());
+                case REPORT_ROW: case LOG_ROW: return Ui.ru ? "Показать" : Ui.tr("Mostrar", "Show");
+                case WARM_ROW: return onOff(Prefs.warm() > 0);
+                default: {
+                    String newVersion = Updater.available(getContext());
+                    return !updateStatus.isEmpty() ? updateStatus
+                            : !newVersion.isEmpty() ? (Ui.ru ? "Доступна " : Ui.tr("Nova ", "New ")) + newVersion
+                            : (Ui.ru ? "Версия " : Ui.tr("Versão ", "Version ")) + Updater.installed(getContext()) + (Ui.ru ? " · проверить" : Ui.tr(" · verificar", " · check"));
+                }
+            }
         }
 
         private String[] settingLabels() {
-            List<String> l = new ArrayList<>();
-            l.add(Ui.tr("Idioma", "Language"));
-            l.add(Ui.tr("Temperatura", "Temperature"));
-            l.add(Ui.tr("Tema", "Theme"));
-            l.add(Ui.tr("Widget do clima", "Weather widget"));
-            l.add(Ui.tr("Cidade", "City"));
-            l.add(Ui.tr("Widget de cotações", "Quotes widget"));
-            l.add(Ui.ru ? "Анимация фона" : Ui.tr("Animação de fundo", "Background animation"));
-            l.add(Ui.ru ? "Звуки щелчков" : Ui.tr("Sons de clique", "Click sounds"));
-            l.add(Ui.ru ? "Ночное обслуживание" : Ui.tr("Manutenção noturna", "Night maintenance"));
-            l.add(Ui.ru ? "Страж VPN" : Ui.tr("Guarda da VPN", "VPN guard"));
-            l.add(Ui.ru ? "Выбор сервера VPN" : Ui.tr("Servidor da VPN", "VPN server picker"));
-            l.add(Ui.ru ? "Отчёт за неделю" : Ui.tr("Relatório da semana", "Weekly report"));
-            l.add(Ui.ru ? "Обновление приложения" : Ui.tr("Atualização", "App update"));
-            l.add(Ui.ru ? "Тёплый экран вечером" : Ui.tr("Tela quente à noite", "Warm screen at night"));
-            l.add(Ui.ru ? "Журнал событий" : Ui.tr("Registro de eventos", "Event log"));
-            l.add("Bitcoin");
-            l.add("Ethereum");
-            l.add("Solana");
-            if (dollar()) l.add(Ui.tr("Dólar", "Dollar"));
-            return l.toArray(new String[0]);
+            int[] r = rows();
+            String[] l = new String[r.length];
+            for (int i = 0; i < r.length; i++) l[i] = labelOf(r[i]);
+            return l;
         }
 
         private String[] settingValues() {
-            String[] labels = settingLabels();
-            String[] v = new String[labels.length];
-            String lang = Prefs.language();
-            v[0] = lang.equals("pt") ? "Português" : lang.equals("en") ? "English" : lang.equals("es") ? "Español"
-                    : lang.equals("de") ? "Deutsch" : lang.equals("ru") ? "Русский" : Ui.tr("Automático", "Automatic");
-            String unit = Prefs.temperature();
-            v[1] = unit.equals("C") ? "°C" : unit.equals("F") ? "°F" : Ui.tr("Automática", "Automatic");
-            String theme = Prefs.theme();
-            v[2] = theme.equals("light") ? Ui.tr("Claro", "Light") : theme.equals("dark") ? Ui.tr("Escuro", "Dark") : Ui.tr("Automático", "Automatic");
-            v[3] = onOff(Prefs.weather());
-            v[CITY_ROW] = !cityStatus.isEmpty() ? cityStatus : Prefs.city().isEmpty() ? "—" : Prefs.city();
-            v[5] = onOff(Prefs.quotes());
-            v[ANIMATION_ROW] = onOff(Prefs.animation());
-            v[SOUNDS_ROW] = onOff(Prefs.sounds());
-            v[MAINTENANCE_ROW] = onOff(Prefs.maintenance());
-            v[VPN_GUARD_ROW] = onOff(Prefs.vpnGuard());
-            v[SERVER_ROW] = onOff(Prefs.serverPick());
-            v[REPORT_ROW] = Ui.ru ? "Показать" : Ui.tr("Mostrar", "Show");
-            v[WARM_ROW] = onOff(Prefs.warm() > 0);
-            v[LOG_ROW] = Ui.ru ? "Показать" : Ui.tr("Mostrar", "Show");
-            String newVersion = Updater.available(getContext());
-            v[UPDATE_ROW] = !updateStatus.isEmpty() ? updateStatus
-                    : !newVersion.isEmpty() ? (Ui.ru ? "Доступна " : Ui.tr("Nova ", "New ")) + newVersion
-                    : (Ui.ru ? "Версия " : Ui.tr("Versão ", "Version ")) + Updater.installed(getContext()) + (Ui.ru ? " · проверить" : Ui.tr(" · verificar", " · check"));
-            // No quotes widget, nowhere to show prices: the coins read as off (and stay locked) until it is back on.
-            for (int i = COIN_ROWS; i < v.length; i++) v[i] = onOff(Prefs.quotes() && Prefs.coin(i - COIN_ROWS));
+            int[] r = rows();
+            String[] v = new String[r.length];
+            for (int i = 0; i < r.length; i++) v[i] = valueOf(r[i]);
             return v;
         }
 
@@ -746,38 +795,34 @@ public class SettingsActivity extends Activity {
                 Prefs.setKeyApp(Prefs.KEYS[focus], appPkgs.get(next));
                 return;
             }
-            switch (focus) {
-                case 0: {
+            switch (rows()[focus]) {
+                case LANG_ROW: {
                     int at = java.util.Arrays.asList(LANGUAGES).indexOf(Prefs.language());
                     Prefs.setLanguage(LANGUAGES[(at + dir + LANGUAGES.length) % LANGUAGES.length]);
                     break;
                 }
-                case 1: {
+                case TEMP_ROW: {
                     int at = java.util.Arrays.asList(UNITS).indexOf(Prefs.temperature());
                     Prefs.setTemperature(UNITS[(at + dir + UNITS.length) % UNITS.length]);
                     break;
                 }
-                case 2: {
+                case THEME_ROW: {
                     int at = java.util.Arrays.asList(THEMES).indexOf(Prefs.theme());
                     Prefs.setTheme(THEMES[(at + dir + THEMES.length) % THEMES.length]);
                     break;
                 }
-                case 3: Prefs.setWeather(!Prefs.weather()); break;
+                case WEATHER_ROW: Prefs.setWeather(!Prefs.weather()); break;
                 case CITY_ROW: return;
                 case REPORT_ROW: if (dir > 0) showReport(); return;
                 case UPDATE_ROW: if (dir > 0) updateAction(); return;
                 case WARM_ROW: Prefs.setWarm(Prefs.warm() > 0 ? 0 : 1); return;
                 case LOG_ROW: if (dir > 0) showLog(); return;
-                case 5: Prefs.setQuotes(!Prefs.quotes()); break;
                 case ANIMATION_ROW: Prefs.setAnimation(!Prefs.animation()); break;
                 case SOUNDS_ROW: Prefs.setSounds(!Prefs.sounds()); break;
                 case MAINTENANCE_ROW: Prefs.setMaintenance(!Prefs.maintenance()); break;
                 case VPN_GUARD_ROW: Prefs.setVpnGuard(!Prefs.vpnGuard()); break;
                 case SERVER_ROW: Prefs.setServerPick(!Prefs.serverPick()); break;
-                default:
-                    if (!Prefs.quotes()) return;
-                    Prefs.setCoin(focus - COIN_ROWS, !Prefs.coin(focus - COIN_ROWS));
-                    break;
+                default: return;
             }
             HomeData.get(getContext()).settingsChanged();
         }
@@ -1033,11 +1078,12 @@ public class SettingsActivity extends Activity {
         }
 
         private void drawList(Canvas c) {
-            boolean keys = screen == REMOTE_KEYS;
-            String[] labels = keys ? keyLabels() : settingLabels();
-            String[] values = keys ? keyValues() : settingValues();
+            boolean keys = screen == REMOTE_KEYS, groups = screen == HOME_GROUPS;
+            String[] labels = labelsNow();
+            String[] values = valuesNow();
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
-            c.drawText(keys ? Ui.tr("Botões do Controle", "Remote Buttons") : Ui.tr("Ajustes do Início", "Home Settings"),
+            c.drawText(keys ? Ui.tr("Botões do Controle", "Remote Buttons") : groups ? Ui.tr("Ajustes do Início", "Home Settings")
+                            : groupLabels()[Math.max(0, Math.min(group, GROUP_ROWS.length - 1))],
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             int top = homeTop(), shown = Math.min(labels.length - top, HOME_VISIBLE);
             for (int i = top; i < top + shown; i++) {
@@ -1045,9 +1091,7 @@ public class SettingsActivity extends Activity {
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i - top);
                 rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
-                boolean locked = !keys && i >= COIN_ROWS && !Prefs.quotes();
-                rowValue.setColor(blend(locked ? 0x59FFFFFF : 0xB3FFFFFF, locked ? 0x591C1C1E : 0xB31C1C1E, f));
-                if (locked) rowLabel.setColor(blend(0x73FFFFFF, 0x731C1C1E, f));
+                rowValue.setColor(blend(0xB3FFFFFF, 0xB31C1C1E, f));
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                 c.drawText(labels[i], rowRect.left + 30 * k, base, rowLabel);
                 c.drawText(values[i], rowRect.right - 30 * k, base, rowValue);
@@ -1055,7 +1099,8 @@ public class SettingsActivity extends Activity {
             Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
             float hy = (LIST_TOP + 20 + shown * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
             c.drawText((labels.length > shown ? (focus + 1) + " / " + labels.length + "  ·  " : "")
-                    + Ui.tr("OK ou as setas mudam o valor.", "OK or the arrows change the value."), LIST_X * k + 30 * k, hy, hint);
+                    + (groups ? (Ui.ru ? "OK открывает группу, Назад возвращает." : "OK opens a group, Back returns.")
+                    : Ui.tr("OK ou as setas mudam o valor.", "OK or the arrows change the value.")), LIST_X * k + 30 * k, hy, hint);
             if (keys) {
                 c.drawText(RemoteKeys.VESTEL ? Ui.tr("YouTube, Prime Video e Google Play: a própria TV controla esses botões.",
                         "YouTube, Prime Video and Google Play: the TV itself controls those buttons.")
@@ -1081,7 +1126,8 @@ public class SettingsActivity extends Activity {
                 String[] city = cities.get(pickScroll + focus);
                 Prefs.setCity(city[1], city[2], city[3]);
                 HomeData.get(c).settingsChanged();
-                focus = CITY_ROW;
+                group = 1;
+                focus = rowOf(CITY_ROW);
                 screen = HOME_SETTINGS;
             } else if (screen == PICKER) {
                 int at = pickScroll + focus;
@@ -1094,7 +1140,11 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (screen == REMOTE_KEYS) {
                 openPicker(focus + 1);
-            } else if (screen == HOME_SETTINGS && focus == CITY_ROW) {
+            } else if (screen == HOME_GROUPS) {
+                group = focus;
+                screen = HOME_SETTINGS;
+                focus = 0;
+            } else if (screen == HOME_SETTINGS && rows()[focus] == CITY_ROW) {
                 askCity();
                 return;
             } else if (screen == HOME_SETTINGS) {
@@ -1109,7 +1159,7 @@ public class SettingsActivity extends Activity {
                 pause();
                 activity.showPreview();
             } else if (focus == 2) {
-                screen = HOME_SETTINGS;
+                screen = HOME_GROUPS;
                 focus = 0;
             } else if (focus == 3) {
                 openShelfEditor();
