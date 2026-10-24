@@ -3,6 +3,9 @@ package io.freemytv;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.SystemClock;
@@ -32,11 +35,23 @@ final class Snapshot {
         } catch (RuntimeException ignored) {}
         sb.append(", VPN ").append(VpnGuard.vpnUp(app) ? "up" : "DOWN");
         try {
-            WifiManager wm = (WifiManager) app.getSystemService(Context.WIFI_SERVICE);
-            WifiInfo wi = wm == null ? null : wm.getConnectionInfo();
-            if (wi != null && wi.getNetworkId() != -1) sb.append(", Wi-Fi ").append(wi.getRssi()).append(" dBm ").append(wi.getFrequency()).append(" MHz ")
-                    .append(wi.getLinkSpeed()).append(" Mbps");
-            else sb.append(", no Wi-Fi");
+            // Which network carries the traffic (the VPN rides on top of one), and how good the Wi-Fi signal is: without the
+            // location permission Android hides the network id and name but not the signal.
+            ConnectivityManager cm = (ConnectivityManager) app.getSystemService(Context.CONNECTIVITY_SERVICE);
+            String carrier = "none";
+            for (Network n : cm.getAllNetworks()) {
+                NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                if (nc == null || nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                        || !nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+                carrier = nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "Wi-Fi" : nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? "Ethernet" : "other";
+            }
+            sb.append(", network ").append(carrier);
+            if (carrier.equals("Wi-Fi")) {
+                WifiManager wm = (WifiManager) app.getSystemService(Context.WIFI_SERVICE);
+                WifiInfo wi = wm == null ? null : wm.getConnectionInfo();
+                if (wi != null) sb.append(" ").append(wi.getRssi()).append(" dBm ").append(wi.getFrequency()).append(" MHz ")
+                        .append(wi.getLinkSpeed()).append(" Mbps");
+            }
         } catch (RuntimeException ignored) {}
         AppLog.w(sb.toString());
     }
