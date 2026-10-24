@@ -66,6 +66,7 @@ final class VpnGuard {
         int now = vpnUp(c) ? 1 : 0;
         if (now == lastUp) return;   // a capability change of a VPN that stayed up (they come every few seconds): nothing to do
         lastUp = now;
+        AppLog.w("vpn network event: " + (now == 1 ? "up" : "down"));
         AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         if (am != null) arm(am, intent(c, 80, ACTION, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE), System.currentTimeMillis() + QUICK);
     }
@@ -124,6 +125,7 @@ final class VpnGuard {
 
     /** One check (on a background thread, from ModeJob). */
     static void checkNow(Context c) {
+        Snapshot.maybe(c);
         if (!Prefs.vpnGuard()) return;
         try {
             c.getPackageManager().getPackageInfo(V2RAYTUN, 0);
@@ -134,13 +136,17 @@ final class VpnGuard {
         AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         long now = System.currentTimeMillis();
         if (vpnUp(c)) {
-            if (sp.getLong("downSince", 0) != 0) Health.count(c, "restores");
+            if (sp.getLong("downSince", 0) != 0) {
+                Health.count(c, "restores");
+                AppLog.w("vpn: back after " + (now - sp.getLong("downSince", 0)) / 1000 + " s");
+            }
             sp.edit().putLong("downSince", 0).putInt("tries", 0).putBoolean("fellBack", false).apply();
             return;
         }
         long down = sp.getLong("downSince", 0);
         if (down == 0) {
             Health.count(c, "drops");
+            AppLog.w("vpn: down, the guard is watching");
             sp.edit().putLong("downSince", now).apply();
             if (am != null) arm(am, intent(c, 80, ACTION, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE), now + QUICK);
             return;

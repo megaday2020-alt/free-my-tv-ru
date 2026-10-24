@@ -33,6 +33,9 @@ final class Prefs {
 
     private static Context app;
 
+    /** The app context (null before App starts), for the log. */
+    static Context context() { return app; }
+
     static void init(Context c) {
         app = c.getApplicationContext();
         migrateKeys();   // before anything reads the button choices

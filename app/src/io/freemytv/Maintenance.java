@@ -46,6 +46,7 @@ final class Maintenance {
 
     /** The work itself (on a background thread, from ModeJob). `allowRestart` false = caches only (for tests). */
     static void runNow(Context c, boolean allowRestart) {
+        AppLog.w("maintenance: start");
         try {
             Updater.check(c);   // only looks; installing is always the person's choice in Settings
         } catch (Exception e) {

@@ -12,11 +12,13 @@ public class HomeReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
         if (Intent.ACTION_BOOT_COMPLETED.equals(action)) {
+            AppLog.w("the TV booted");
             HomeMode.bootCheck(context);
             Maintenance.schedule(context);
             VpnGuard.schedule(context);
             VpnServers.schedule(context);
         } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
+            AppLog.w("the app was updated to " + Updater.installed(context));
             Updater.announce(context);   // an update started from Settings: say it is done
             HomeMode.verify(context);   // app updated: complete Free My TV mode if something is missing
             HomeMode.ensureRemoteService(context, 3_000);
