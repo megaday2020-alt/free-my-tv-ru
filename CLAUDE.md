@@ -1,3 +1,5 @@
+> Актуальное состояние проекта (что сделано, что открыто, где что лежит): [PROJECT_STATE.md](PROJECT_STATE.md).
+
 # Free My TV: notes for Claude
 
 A home screen for Google TV and Android TV that replaces the stock one, plus a settings app that switches between
