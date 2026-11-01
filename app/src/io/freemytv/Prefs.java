@@ -176,9 +176,16 @@ final class Prefs {
     /** Index into NewsFeed.NAMES. */
     static int newsSource() { return Math.max(0, Math.min(sp().getInt("newsSource", 0), NewsFeed.NAMES.length - 1)); }
     static void setNewsSource(int i) { sp().edit().putInt("newsSource", i).apply(); version++; }
-    /** 0 dim (the default: a dark room), 1 medium, 2 bright. */
-    static int saverBrightness() { return Math.max(0, Math.min(sp().getInt("saverBright", 0), 2)); }
-    static void setSaverBrightness(int i) { sp().edit().putInt("saverBright", i).apply(); version++; }
+    /** Minutes until the screensaver goes to economy (a dim clock on black); 0 = never. */
+    static int saverEcoMinutes() { return sp().getInt("saverEco", 10); }
+    static void setSaverEcoMinutes(int m) { sp().edit().putInt("saverEco", m).apply(); version++; }
+    static boolean saverRates() { return sp().getBoolean("saverRates", true); }
+    static void setSaverRates(boolean on) { put("saverRates", on); }
+    static boolean saverLink() { return sp().getBoolean("saverLink", true); }
+    static void setSaverLink(boolean on) { put("saverLink", on); }
+    /** 0 auto (darker by night), 1 dim, 2 medium, 3 bright. */
+    static int saverBrightness() { return Math.max(0, Math.min(sp().getInt("saverBright2", 0), 3)); }
+    static void setSaverBrightness(int i) { sp().edit().putInt("saverBright2", i).apply(); version++; }
 
     static boolean quotes() { return sp().getBoolean("quotes", Config.SHOW_CRYPTO); }
     static void setQuotes(boolean on) { put("quotes", on); }

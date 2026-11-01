@@ -642,11 +642,11 @@ public class SettingsActivity extends Activity {
         // Home Settings are grouped: the list of groups (HOME_GROUPS), then the rows of one group (HOME_SETTINGS).
         private static final int LANG_ROW = 0, TEMP_ROW = 1, THEME_ROW = 2, WEATHER_ROW = 3, CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7,
                 MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, LOG_ROW = 14,
-                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_SOURCE_ROW = 19, SAVER_BRIGHT_ROW = 20;
+                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_SOURCE_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_RATES_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23;
         private static final int[][] GROUP_ROWS = {
                 {LANG_ROW, TEMP_ROW, THEME_ROW, ANIMATION_ROW, SOUNDS_ROW, WARM_ROW},   // look
                 {WEATHER_ROW, CITY_ROW},                                                // weather
-                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_NEWS_ROW, NEWS_SOURCE_ROW, SAVER_BRIGHT_ROW},   // screensaver
+                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_NEWS_ROW, NEWS_SOURCE_ROW, SAVER_RATES_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW},   // screensaver
                 {VPN_GUARD_ROW, SERVER_ROW, MAINTENANCE_ROW},                           // VPN and upkeep
                 {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
         private int group;
@@ -656,7 +656,7 @@ public class SettingsActivity extends Activity {
         private static boolean isSwitch(int id) {
             return id == WEATHER_ROW || id == ANIMATION_ROW || id == SOUNDS_ROW || id == MAINTENANCE_ROW || id == VPN_GUARD_ROW
                     || id == SERVER_ROW || id == WARM_ROW || id == SAVER_CLOCK_ROW || id == SAVER_DATE_ROW || id == SAVER_WEATHER_ROW
-                    || id == SAVER_NEWS_ROW;
+                    || id == SAVER_NEWS_ROW || id == SAVER_RATES_ROW || id == SAVER_LINK_ROW;
         }
 
         private int[] rows() {
@@ -676,7 +676,7 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] groupValues() {
-            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, новости", "страж, серверы", "обновление, журнал"}
+            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, новости, курсы", "страж, серверы", "обновление, журнал"}
                     : new String[] {"language, theme, animation", "widget, city", "clock, weather, news", "guard, servers", "update, log"};
         }
 
@@ -707,6 +707,9 @@ public class SettingsActivity extends Activity {
                 case SAVER_DATE_ROW: return Ui.ru ? "Дата" : "Date";
                 case SAVER_WEATHER_ROW: return Ui.ru ? "Погода" : "Weather";
                 case SAVER_NEWS_ROW: return Ui.ru ? "Новости" : "News";
+                case SAVER_ECO_ROW: return Ui.ru ? "Экономия экрана" : "Screen economy";
+                case SAVER_RATES_ROW: return Ui.ru ? "Курсы валют" : "Exchange rates";
+                case SAVER_LINK_ROW: return Ui.ru ? "Состояние связи" : "Connection";
                 case NEWS_SOURCE_ROW: return Ui.ru ? "Источник новостей" : "News source";
                 case SAVER_BRIGHT_ROW: return Ui.ru ? "Яркость заставки" : "Screensaver brightness";
                 default: return Ui.ru ? "Журнал событий" : Ui.tr("Registro de eventos", "Event log");
@@ -741,10 +744,17 @@ public class SettingsActivity extends Activity {
                 case SAVER_DATE_ROW: return onOff(Prefs.saverDate());
                 case SAVER_WEATHER_ROW: return onOff(Prefs.saverWeather());
                 case SAVER_NEWS_ROW: return onOff(Prefs.saverNews());
+                case SAVER_ECO_ROW: {
+                    int m = Prefs.saverEcoMinutes();
+                    return m == 0 ? (Ui.ru ? "Никогда" : "Never") : (Ui.ru ? "Через " + m + " мин" : "After " + m + " min");
+                }
+                case SAVER_RATES_ROW: return onOff(Prefs.saverRates());
+                case SAVER_LINK_ROW: return onOff(Prefs.saverLink());
                 case NEWS_SOURCE_ROW: return NewsFeed.NAMES[Prefs.newsSource()];
                 case SAVER_BRIGHT_ROW: {
                     int level = Prefs.saverBrightness();
-                    return Ui.ru ? (level == 0 ? "Тусклая" : level == 1 ? "Средняя" : "Яркая") : (level == 0 ? "Dim" : level == 1 ? "Medium" : "Bright");
+                    return Ui.ru ? (level == 0 ? "Авто (ночью темнее)" : level == 1 ? "Тусклая" : level == 2 ? "Средняя" : "Яркая")
+                            : (level == 0 ? "Auto (darker at night)" : level == 1 ? "Dim" : level == 2 ? "Medium" : "Bright");
                 }
                 default: {
                     String newVersion = Updater.available(getContext());
@@ -844,8 +854,17 @@ public class SettingsActivity extends Activity {
                 case SAVER_DATE_ROW: Prefs.setSaverDate(!Prefs.saverDate()); return;
                 case SAVER_WEATHER_ROW: Prefs.setSaverWeather(!Prefs.saverWeather()); return;
                 case SAVER_NEWS_ROW: Prefs.setSaverNews(!Prefs.saverNews()); return;
+                case SAVER_ECO_ROW: {
+                    int[] choices = {0, 5, 10, 30, 60};
+                    int at = 0;
+                    for (int i = 0; i < choices.length; i++) if (choices[i] == Prefs.saverEcoMinutes()) at = i;
+                    Prefs.setSaverEcoMinutes(choices[(at + dir + choices.length) % choices.length]);
+                    return;
+                }
+                case SAVER_RATES_ROW: Prefs.setSaverRates(!Prefs.saverRates()); return;
+                case SAVER_LINK_ROW: Prefs.setSaverLink(!Prefs.saverLink()); return;
                 case NEWS_SOURCE_ROW: Prefs.setNewsSource((Prefs.newsSource() + dir + NewsFeed.NAMES.length) % NewsFeed.NAMES.length); return;
-                case SAVER_BRIGHT_ROW: Prefs.setSaverBrightness((Prefs.saverBrightness() + dir + 3) % 3); return;
+                case SAVER_BRIGHT_ROW: Prefs.setSaverBrightness((Prefs.saverBrightness() + dir + 4) % 4); return;
                 case LOG_ROW: if (dir > 0) showLog(); return;
                 case ANIMATION_ROW: Prefs.setAnimation(!Prefs.animation()); break;
                 case SOUNDS_ROW: Prefs.setSounds(!Prefs.sounds()); break;

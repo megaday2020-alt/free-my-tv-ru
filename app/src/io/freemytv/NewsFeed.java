@@ -25,6 +25,7 @@ final class NewsFeed {
     private static final int KEEP = 12;
     private static final long FRESH_MS = 10 * 60_000L;
     private static final Pattern ITEM = Pattern.compile("<item>(.*?)</item>", Pattern.DOTALL);
+    private static final Pattern DATE = Pattern.compile("<pubDate>(.*?)</pubDate>", Pattern.DOTALL);
     private static final Pattern TITLE = Pattern.compile("<title>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</title>", Pattern.DOTALL);
     private static boolean busy;
 
@@ -62,7 +63,7 @@ final class NewsFeed {
         }, "news-feed").start();
     }
 
-    private static String download(String url) throws java.io.IOException {
+    static String download(String url) throws java.io.IOException {
         java.io.IOException last = null;
         for (int attempt = 0; attempt < 2; attempt++) {   // outside the VPN first (these are Russian sites), then the default network
             try {
@@ -99,7 +100,16 @@ final class NewsFeed {
             Matcher t = TITLE.matcher(item.group(1));
             if (!t.find()) continue;
             String s = unescape(t.group(1)).replaceAll("\\s+", " ").trim();
-            if (s.length() >= 15 && s.length() <= 220) out.add(s);
+            if (s.length() < 15 || s.length() > 220) continue;
+            String when = "";
+            Matcher d = DATE.matcher(item.group(1));
+            if (d.find()) {
+                try {
+                    java.util.Date at = new java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.ENGLISH).parse(d.group(1).trim());
+                    when = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(at);
+                } catch (java.text.ParseException ignored) {}
+            }
+            out.add(when + "\t" + s);
         }
         return out;
     }
