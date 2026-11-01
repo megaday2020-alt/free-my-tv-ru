@@ -37,14 +37,14 @@ import java.util.Random;
 
 /**
  * The screensaver: an information board on a dark background with a slow glow that follows the weather. Cards (each with its
- * own switch in Settings): the clock and date; the weather now, the next hours and the next five days; the latest headlines;
+ * own switch in Settings): the clock and date; the weather now, today and the next two days; the latest headlines;
  * the Central Bank's rates; and how the connection is (VPN delay, Wi-Fi). After a while it goes to "economy": only a dim clock
  * on black, nothing animated, and a host that owns the window turns the panel down. Shown by the system when the TV is idle,
  * by the "Screensaver" tile and by the sleep timer. Any key leaves (that is up to the host).
  */
 final class InfoView extends FrameLayout implements HomeData.Listener {
     private static final long PAGE_MS = 30_000;
-    private static final int HEADLINES = 4;
+    private static final int HEADLINES = 7;
     private static final int WHITE = 0xFFFFFFFF, DIM = 0xB8FFFFFF, FAINT = 0x70FFFFFF, CARD = 0x17FFFFFF, CARD_EDGE = 0x2AFFFFFF;
     private static final int WARM = 0xFFFFB35C, BLUE = 0xFF6FB1FF, GREEN = 0xFF63E0A3, VIOLET = 0xFFB69CFF;
 
@@ -64,12 +64,12 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     private final List<ObjectAnimator> motion = new ArrayList<>();
     private LinearLayout row;
     private TextView ecoClock;
-    private TextView dateText, tempText, condText, detailText, nowcastText, sunText, headSource, ratesBody, linkBody;
+    private TextView dateText, tempText, condText, detailText, todayText, nowcastText, headSource, ratesBody, linkBody;
     private SymbolView nowIcon;
     private final List<TextView> headlineRows = new ArrayList<>();
     private LinearLayout headlineBox;
-    private final List<TextView> dayName = new ArrayList<>(), dayTemps = new ArrayList<>(), hourName = new ArrayList<>(), hourTemps = new ArrayList<>();
-    private final List<SymbolView> dayIcon = new ArrayList<>(), hourIcon = new ArrayList<>();
+    private final List<TextView> dayName = new ArrayList<>(), dayTemps = new ArrayList<>();
+    private final List<SymbolView> dayIcon = new ArrayList<>();
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -126,7 +126,8 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
 
         row = new LinearLayout(c);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER);
+        row.setGravity(Gravity.CENTER_HORIZONTAL);
+        row.setPadding(0, Math.round(56 * u), 0, Math.round(56 * u));
         LinearLayout left = column(c, 880), right = column(c, 840);
         boolean leftAny = false, rightAny = false;
 
@@ -136,7 +137,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
                 clock.setFormat24Hour("HH:mm");
                 clock.setFormat12Hour("HH:mm");
                 clock.setTypeface(Ui.displaySemibold);
-                clock.setTextSize(TypedValue.COMPLEX_UNIT_PX, 200 * u);
+                clock.setTextSize(TypedValue.COMPLEX_UNIT_PX, 170 * u);
                 clock.setTextColor(WHITE);
                 clock.setIncludeFontPadding(false);
                 clock.setLetterSpacing(-0.02f);
@@ -148,7 +149,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             if (Prefs.saverDate()) {
                 dateText = text(c, Ui.displayMedium, 40, DIM);
                 dateText.setLetterSpacing(0.02f);
-                dateText.setPadding(Math.round(8 * u), Math.round((Prefs.saverClock() ? 4 : 0) * u), 0, Math.round(20 * u));
+                dateText.setPadding(Math.round(8 * u), Math.round((Prefs.saverClock() ? 2 : 0) * u), 0, Math.round(14 * u));
                 left.addView(dateText);
             }
             leftAny = true;
@@ -158,7 +159,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             leftAny = true;
         }
         if (Prefs.saverNews()) {
-            right.addView(newsCard(c), cardParams(0));
+            right.addView(newsCard(c), stretch(0));
             rightAny = true;
         }
         if (Prefs.saverRates() || Prefs.saverLink()) {
@@ -166,8 +167,13 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             small.setOrientation(LinearLayout.HORIZONTAL);
             if (Prefs.saverRates()) small.addView(smallCard(c, "bitcoin", GREEN, Ui.ru ? "Курс ЦБ" : "Exchange rates", true), smallParams(Prefs.saverLink()));
             if (Prefs.saverLink()) small.addView(smallCard(c, "wifi", VIOLET, Ui.ru ? "Связь" : "Connection", false), smallParams(false));
-            right.addView(small, cardParams(Prefs.saverNews() ? 24 : 0));
-            rightAny = true;
+            if (Prefs.saverNews()) {   // under the weather; without the news they go to the right column
+                left.addView(small, stretch(leftAny ? 24 : 0));
+                leftAny = true;
+            } else {
+                right.addView(small, stretch(0));
+                rightAny = true;
+            }
         }
         if (leftAny) row.addView(left);
         if (leftAny && rightAny) row.addView(new View(c), new LinearLayout.LayoutParams(Math.round(48 * u), 1));
@@ -196,12 +202,19 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     private LinearLayout column(Context c, int width) {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setLayoutParams(new LinearLayout.LayoutParams(Math.round(width * u), ViewGroup.LayoutParams.WRAP_CONTENT));
+        l.setLayoutParams(new LinearLayout.LayoutParams(Math.round(width * u), ViewGroup.LayoutParams.MATCH_PARENT));
         return l;
     }
 
     private LinearLayout.LayoutParams cardParams(float topMargin) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = Math.round(topMargin * u);
+        return lp;
+    }
+
+    /** A card that takes the height left in its column, so both columns end at the same line. */
+    private LinearLayout.LayoutParams stretch(float topMargin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
         lp.topMargin = Math.round(topMargin * u);
         return lp;
     }
@@ -273,58 +286,53 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         LinearLayout top = new LinearLayout(c);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(0, Math.round(10 * u), 0, 0);
+        top.setPadding(0, Math.round(8 * u), 0, 0);
         nowIcon = new SymbolView(c);
-        top.addView(nowIcon, new LinearLayout.LayoutParams(Math.round(112 * u), Math.round(112 * u)));
-        tempText = text(c, Ui.displaySemibold, 112, WHITE);
-        tempText.setPadding(Math.round(14 * u), 0, Math.round(28 * u), 0);
+        top.addView(nowIcon, new LinearLayout.LayoutParams(Math.round(96 * u), Math.round(96 * u)));
+        tempText = text(c, Ui.displaySemibold, 96, WHITE);
+        tempText.setPadding(Math.round(12 * u), 0, Math.round(24 * u), 0);
         top.addView(tempText);
         LinearLayout words = new LinearLayout(c);
         words.setOrientation(LinearLayout.VERTICAL);
-        condText = text(c, Ui.displaySemibold, 42, WHITE);
-        detailText = text(c, Ui.medium, 28, DIM);
-        detailText.setLineSpacing(0, 1.12f);
-        detailText.setPadding(0, Math.round(8 * u), 0, 0);
+        condText = text(c, Ui.displaySemibold, 38, WHITE);
+        detailText = text(c, Ui.medium, 26, DIM);
+        detailText.setPadding(0, Math.round(6 * u), 0, 0);
         words.addView(condText);
         words.addView(detailText);
         top.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         card.addView(top);
 
-        nowcastText = text(c, Ui.semibold, 28, BLUE);
-        nowcastText.setPadding(0, Math.round(12 * u), 0, 0);
+        todayText = text(c, Ui.medium, 28, WHITE);   // today: the day's high and low, and rain soon
+        todayText.setPadding(0, Math.round(8 * u), 0, 0);
+        card.addView(todayText);
+        nowcastText = text(c, Ui.semibold, 26, BLUE);
+        nowcastText.setPadding(0, Math.round(6 * u), 0, 0);
         card.addView(nowcastText);
 
-        card.addView(divider(c, 14, 12));
-        card.addView(strip(c, 6, hourName, hourIcon, hourTemps, 46));
-        card.addView(divider(c, 10, 12));
-        card.addView(strip(c, 5, dayName, dayIcon, dayTemps, 46));
-
-        sunText = text(c, Ui.medium, 25, FAINT);
-        sunText.setPadding(0, Math.round(12 * u), 0, 0);
-        card.addView(sunText);
-        return card;
-    }
-
-    /** A row of equal columns: a name, a symbol and a temperature. */
-    private LinearLayout strip(Context c, int count, List<TextView> names, List<SymbolView> icons, List<TextView> temps, float iconSize) {
+        card.addView(divider(c, 12, 12));
         LinearLayout days = new LinearLayout(c);
         days.setOrientation(LinearLayout.HORIZONTAL);
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < 2; i++) {   // tomorrow and the day after: icon, then the weekday over high / low
+            LinearLayout cell = new LinearLayout(c);
+            cell.setOrientation(LinearLayout.HORIZONTAL);
+            cell.setGravity(Gravity.CENTER_VERTICAL);
+            SymbolView icon = new SymbolView(c);
+            cell.addView(icon, new LinearLayout.LayoutParams(Math.round(56 * u), Math.round(56 * u)));
             LinearLayout col = new LinearLayout(c);
             col.setOrientation(LinearLayout.VERTICAL);
-            col.setGravity(Gravity.CENTER_HORIZONTAL);
+            col.setPadding(Math.round(12 * u), 0, 0, 0);
             TextView name = text(c, Ui.medium, 25, DIM);
-            SymbolView icon = new SymbolView(c);
-            TextView t = text(c, Ui.displaySemibold, 27, WHITE);
+            TextView t = text(c, Ui.displaySemibold, 29, WHITE);
             col.addView(name);
-            col.addView(icon, new LinearLayout.LayoutParams(Math.round(iconSize * u), Math.round(iconSize * u)));
             col.addView(t);
-            names.add(name);
-            icons.add(icon);
-            temps.add(t);
-            days.addView(col, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            cell.addView(col);
+            dayName.add(name);
+            dayIcon.add(icon);
+            dayTemps.add(t);
+            days.addView(cell, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         }
-        return days;
+        card.addView(days);
+        return card;
     }
 
     private LinearLayout newsCard(Context c) {
@@ -375,40 +383,29 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             boolean have = !Double.isNaN(w.temp);
             tempText.setText(have ? HomeData.degrees(w.temp) : "—");
             condText.setText(have ? HomeData.condition(w.code, w.isDay) : (Ui.ru ? "Нет данных о погоде" : "No weather data"));
-            nowIcon.set(have ? Symbols.weather(w.code, w.isDay) : null, WARM, 112 * u);
+            nowIcon.set(have ? Symbols.weather(w.code, w.isDay) : null, WARM, 96 * u);
             StringBuilder d = new StringBuilder();
-            if (!Double.isNaN(w.max) && !Double.isNaN(w.min)) {
-                d.append(Ui.ru ? "Днём " : "High ").append(HomeData.degrees(w.max)).append(Ui.ru ? "  ·  ночью " : "  ·  low ").append(HomeData.degrees(w.min));
-            }
             String wind = HomeData.windSpeedText(w);
-            if (!wind.isEmpty()) d.append(d.length() > 0 ? "\n" : "").append(Ui.ru ? "Ветер " : "Wind ").append(wind);
+            if (!wind.isEmpty()) d.append(Ui.ru ? "Ветер " : "Wind ").append(wind);
             String pressure = HomeData.pressureValue(w);
-            if (!pressure.isEmpty()) d.append(wind.isEmpty() ? (d.length() > 0 ? "\n" : "") : "  ·  ").append(Ui.ru ? "Давление " : "Pressure ").append(pressure);
+            if (!pressure.isEmpty()) d.append(d.length() > 0 ? "  ·  " : "").append(pressure);
             detailText.setText(d.toString());
+            detailText.setVisibility(d.length() == 0 ? View.GONE : View.VISIBLE);
+            boolean range = !Double.isNaN(w.max) && !Double.isNaN(w.min);
+            todayText.setText(range ? (Ui.ru ? "Сегодня: днём " : "Today: high ") + HomeData.degrees(w.max)
+                    + (Ui.ru ? ", ночью " : ", low ") + HomeData.degrees(w.min) : "");
+            todayText.setVisibility(range ? View.VISIBLE : View.GONE);
             nowcastText.setText(w.nowcast == null ? "" : w.nowcast);
             nowcastText.setVisibility(w.nowcast == null || w.nowcast.isEmpty() ? View.GONE : View.VISIBLE);
 
-            // The next hours (every second hour, to look further ahead) and the next five days.
-            SimpleDateFormat hourFormat = new SimpleDateFormat("H:00", locale);
-            int step = w.hours.size() >= 12 ? 2 : 1;
-            for (int i = 0; i < hourName.size(); i++) {
-                int at = i * step;
-                boolean ok = at < w.hours.size() && at < w.hourTemp.size() && at < w.hourCode.size();
-                hourName.get(i).setText(ok ? hourFormat.format(new Date(w.hours.get(at))) : "");
-                hourIcon.get(i).set(ok ? Symbols.weather(w.hourCode.get(at), w.hourDay.get(at)) : null, WHITE, 46 * u);
-                hourTemps.get(i).setText(ok ? HomeData.degrees(w.hourTemp.get(at)) : "");
-            }
-            SimpleDateFormat dayFormat = new SimpleDateFormat("EE", locale);
+            SimpleDateFormat dayFormat = new SimpleDateFormat("EEEE", locale);
             for (int i = 0; i < dayName.size(); i++) {
                 int at = i + 1;   // fc[0] is today
                 boolean ok = w.fcAt[at] > 0 && !Double.isNaN(w.fcMax[at]);
                 dayName.get(i).setText(ok ? cap(dayFormat.format(new Date(w.fcAt[at]))) : "");
-                dayIcon.get(i).set(ok && w.fcCode[at] >= 0 ? Symbols.weather(w.fcCode[at], true) : null, WHITE, 46 * u);
+                dayIcon.get(i).set(ok && w.fcCode[at] >= 0 ? Symbols.weather(w.fcCode[at], true) : null, WHITE, 56 * u);
                 dayTemps.get(i).setText(ok ? HomeData.degrees(w.fcMax[at]) + " / " + HomeData.degrees(w.fcMin[at]) : "");
             }
-            SimpleDateFormat hm = new SimpleDateFormat("H:mm", locale);
-            sunText.setText(w.sunrise > 0 && w.sunset > 0 ? (Ui.ru ? "Восход " : "Sunrise ") + hm.format(new Date(w.sunrise))
-                    + (Ui.ru ? "   ·   закат " : "   ·   sunset ") + hm.format(new Date(w.sunset)) : "");
         }
 
         if (ratesBody != null) {
@@ -456,7 +453,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     /** Shows the next group of headlines (each with the time it came out), with a fade. */
     private void flipHeadlines() {
         if (headlineBox == null) return;
-        final List<String> list = NewsFeed.saved(getContext(), Prefs.newsSource());
+        final List<String> list = NewsFeed.saved(getContext());
         if (list.isEmpty()) {
             headSource.setText("");
             for (TextView t : headlineRows) t.setText("");
@@ -466,7 +463,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         final int groups = Math.max(1, (list.size() + HEADLINES - 1) / HEADLINES);
         final int from = (page++ % groups) * HEADLINES;
         headlineBox.animate().alpha(0f).setDuration(350).withEndAction(() -> {
-            headSource.setText(NewsFeed.NAMES[Prefs.newsSource()]);
+            headSource.setText(Prefs.newsImportant() > 0 ? (Ui.ru ? "только важное" : "important only") : "");
             for (int i = 0; i < HEADLINES; i++) {
                 TextView t = headlineRows.get(i);
                 if (from + i >= list.size()) {
@@ -474,11 +471,16 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
                     continue;
                 }
                 String line = list.get(from + i);
-                int tab = line.indexOf('\t');
-                String when = tab > 0 ? line.substring(0, tab) : "";
-                String title = tab > 0 ? line.substring(tab + 1) : line;
-                SpannableString s = new SpannableString(when.isEmpty() ? title : when + "   " + title);
-                if (!when.isEmpty()) s.setSpan(new ForegroundColorSpan(BLUE), 0, when.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                String[] f = line.split("\t", 3);
+                if (f.length < 3) {
+                    t.setText(line);
+                    continue;
+                }
+                String head = f[0] + "  " + f[1];   // the time, then where it came from in a small violet tag
+                SpannableString s = new SpannableString(head + "   " + f[2]);
+                s.setSpan(new ForegroundColorSpan(BLUE), 0, f[0].length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                s.setSpan(new ForegroundColorSpan(VIOLET), f[0].length() + 2, head.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                s.setSpan(new android.text.style.RelativeSizeSpan(0.78f), f[0].length() + 2, head.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 t.setText(s);
             }
             headlineBox.animate().alpha(1f).setDuration(500).start();
@@ -487,7 +489,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
 
     private void refreshData() {
         data.refreshIfStale();
-        NewsFeed.refresh(getContext(), Prefs.newsSource(), () -> handler.post(this::flipHeadlines));
+        NewsFeed.refresh(getContext(), () -> handler.post(this::flipHeadlines));
         Rates.refresh(getContext(), () -> handler.post(this::fill));
     }
 

@@ -642,11 +642,13 @@ public class SettingsActivity extends Activity {
         // Home Settings are grouped: the list of groups (HOME_GROUPS), then the rows of one group (HOME_SETTINGS).
         private static final int LANG_ROW = 0, TEMP_ROW = 1, THEME_ROW = 2, WEATHER_ROW = 3, CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7,
                 MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, LOG_ROW = 14,
-                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_SOURCE_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_RATES_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23;
+                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_IMPORTANT_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_RATES_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23, SAVER_PAUSE_ROW = 24,
+                NEWS_SRC_ROW = 30;   // 30..34: one switch per news source (NewsFeed.NAMES)
         private static final int[][] GROUP_ROWS = {
                 {LANG_ROW, TEMP_ROW, THEME_ROW, ANIMATION_ROW, SOUNDS_ROW, WARM_ROW},   // look
                 {WEATHER_ROW, CITY_ROW},                                                // weather
-                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_NEWS_ROW, NEWS_SOURCE_ROW, SAVER_RATES_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW},   // screensaver
+                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_RATES_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW, SAVER_PAUSE_ROW},   // screensaver
+                {SAVER_NEWS_ROW, NEWS_IMPORTANT_ROW, NEWS_SRC_ROW, NEWS_SRC_ROW + 1, NEWS_SRC_ROW + 2, NEWS_SRC_ROW + 3, NEWS_SRC_ROW + 4},   // screensaver news
                 {VPN_GUARD_ROW, SERVER_ROW, MAINTENANCE_ROW},                           // VPN and upkeep
                 {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
         private int group;
@@ -656,7 +658,7 @@ public class SettingsActivity extends Activity {
         private static boolean isSwitch(int id) {
             return id == WEATHER_ROW || id == ANIMATION_ROW || id == SOUNDS_ROW || id == MAINTENANCE_ROW || id == VPN_GUARD_ROW
                     || id == SERVER_ROW || id == WARM_ROW || id == SAVER_CLOCK_ROW || id == SAVER_DATE_ROW || id == SAVER_WEATHER_ROW
-                    || id == SAVER_NEWS_ROW || id == SAVER_RATES_ROW || id == SAVER_LINK_ROW;
+                    || id == SAVER_NEWS_ROW || (id >= NEWS_SRC_ROW && id < NEWS_SRC_ROW + NewsFeed.NAMES.length) || id == SAVER_RATES_ROW || id == SAVER_LINK_ROW;
         }
 
         private int[] rows() {
@@ -671,13 +673,13 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] groupLabels() {
-            return Ui.ru ? new String[] {"Вид", "Погода", "Заставка", "VPN и обслуживание", "Приложение"}
-                    : new String[] {Ui.tr("Aparência", "Look"), Ui.tr("Clima", "Weather"), "Screensaver", Ui.tr("VPN e manutenção", "VPN and upkeep"), Ui.tr("Aplicativo", "App")};
+            return Ui.ru ? new String[] {"Вид", "Погода", "Заставка", "Новости заставки", "VPN и обслуживание", "Приложение"}
+                    : new String[] {Ui.tr("Aparência", "Look"), Ui.tr("Clima", "Weather"), "Screensaver", "Screensaver news", Ui.tr("VPN e manutenção", "VPN and upkeep"), Ui.tr("Aplicativo", "App")};
         }
 
         private String[] groupValues() {
-            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, новости, курсы", "страж, серверы", "обновление, журнал"}
-                    : new String[] {"language, theme, animation", "widget, city", "clock, weather, news", "guard, servers", "update, log"};
+            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, курсы, яркость", "каналы, только важное", "страж, серверы", "обновление, журнал"}
+                    : new String[] {"language, theme, animation", "widget, city", "clock, weather, rates", "channels, important only", "guard, servers", "update, log"};
         }
 
         private String[] labelsNow() {
@@ -708,9 +710,12 @@ public class SettingsActivity extends Activity {
                 case SAVER_WEATHER_ROW: return Ui.ru ? "Погода" : "Weather";
                 case SAVER_NEWS_ROW: return Ui.ru ? "Новости" : "News";
                 case SAVER_ECO_ROW: return Ui.ru ? "Экономия экрана" : "Screen economy";
+                case SAVER_PAUSE_ROW: return Ui.ru ? "Заставка при паузе" : "Screensaver when idle";
                 case SAVER_RATES_ROW: return Ui.ru ? "Курсы валют" : "Exchange rates";
                 case SAVER_LINK_ROW: return Ui.ru ? "Состояние связи" : "Connection";
-                case NEWS_SOURCE_ROW: return Ui.ru ? "Источник новостей" : "News source";
+                case NEWS_IMPORTANT_ROW: return Ui.ru ? "Только важное" : "Important only";
+                case NEWS_SRC_ROW: case NEWS_SRC_ROW + 1: case NEWS_SRC_ROW + 2: case NEWS_SRC_ROW + 3: case NEWS_SRC_ROW + 4:
+                    return (Ui.ru ? "Канал: " : "Source: ") + NewsFeed.NAMES[id - NEWS_SRC_ROW];
                 case SAVER_BRIGHT_ROW: return Ui.ru ? "Яркость заставки" : "Screensaver brightness";
                 default: return Ui.ru ? "Журнал событий" : Ui.tr("Registro de eventos", "Event log");
             }
@@ -744,13 +749,23 @@ public class SettingsActivity extends Activity {
                 case SAVER_DATE_ROW: return onOff(Prefs.saverDate());
                 case SAVER_WEATHER_ROW: return onOff(Prefs.saverWeather());
                 case SAVER_NEWS_ROW: return onOff(Prefs.saverNews());
+                case SAVER_PAUSE_ROW: {
+                    int m = Prefs.pauseSaverMinutes();
+                    return m == 0 ? (Ui.ru ? "Выкл" : "Off") : (Ui.ru ? "Через " + m + " мин" : "After " + m + " min");
+                }
                 case SAVER_ECO_ROW: {
                     int m = Prefs.saverEcoMinutes();
                     return m == 0 ? (Ui.ru ? "Никогда" : "Never") : (Ui.ru ? "Через " + m + " мин" : "After " + m + " min");
                 }
                 case SAVER_RATES_ROW: return onOff(Prefs.saverRates());
                 case SAVER_LINK_ROW: return onOff(Prefs.saverLink());
-                case NEWS_SOURCE_ROW: return NewsFeed.NAMES[Prefs.newsSource()];
+                case NEWS_IMPORTANT_ROW: {
+                    int level = Prefs.newsImportant();
+                    return Ui.ru ? (level == 0 ? "Выкл, все посты" : level == 1 ? "Больше новостей" : level == 2 ? "Обычно" : "Только главное")
+                            : (level == 0 ? "Off, all posts" : level == 1 ? "More news" : level == 2 ? "Usual" : "Main ones only");
+                }
+                case NEWS_SRC_ROW: case NEWS_SRC_ROW + 1: case NEWS_SRC_ROW + 2: case NEWS_SRC_ROW + 3: case NEWS_SRC_ROW + 4:
+                    return onOff((Prefs.newsMask() & (1 << (id - NEWS_SRC_ROW))) != 0);
                 case SAVER_BRIGHT_ROW: {
                     int level = Prefs.saverBrightness();
                     return Ui.ru ? (level == 0 ? "Авто (ночью темнее)" : level == 1 ? "Тусклая" : level == 2 ? "Средняя" : "Яркая")
@@ -854,6 +869,13 @@ public class SettingsActivity extends Activity {
                 case SAVER_DATE_ROW: Prefs.setSaverDate(!Prefs.saverDate()); return;
                 case SAVER_WEATHER_ROW: Prefs.setSaverWeather(!Prefs.saverWeather()); return;
                 case SAVER_NEWS_ROW: Prefs.setSaverNews(!Prefs.saverNews()); return;
+                case SAVER_PAUSE_ROW: {
+                    int[] choices = {0, 5, 10, 15, 30};
+                    int at = 0;
+                    for (int i = 0; i < choices.length; i++) if (choices[i] == Prefs.pauseSaverMinutes()) at = i;
+                    Prefs.setPauseSaverMinutes(choices[(at + dir + choices.length) % choices.length]);
+                    return;
+                }
                 case SAVER_ECO_ROW: {
                     int[] choices = {0, 5, 10, 30, 60};
                     int at = 0;
@@ -863,7 +885,12 @@ public class SettingsActivity extends Activity {
                 }
                 case SAVER_RATES_ROW: Prefs.setSaverRates(!Prefs.saverRates()); return;
                 case SAVER_LINK_ROW: Prefs.setSaverLink(!Prefs.saverLink()); return;
-                case NEWS_SOURCE_ROW: Prefs.setNewsSource((Prefs.newsSource() + dir + NewsFeed.NAMES.length) % NewsFeed.NAMES.length); return;
+                case NEWS_IMPORTANT_ROW: Prefs.setNewsImportant((Prefs.newsImportant() + dir + 4) % 4); return;
+                case NEWS_SRC_ROW: case NEWS_SRC_ROW + 1: case NEWS_SRC_ROW + 2: case NEWS_SRC_ROW + 3: case NEWS_SRC_ROW + 4: {
+                    int bit = rows()[focus] - NEWS_SRC_ROW;
+                    Prefs.setNewsSource(bit, (Prefs.newsMask() & (1 << bit)) == 0);
+                    return;
+                }
                 case SAVER_BRIGHT_ROW: Prefs.setSaverBrightness((Prefs.saverBrightness() + dir + 4) % 4); return;
                 case LOG_ROW: if (dir > 0) showLog(); return;
                 case ANIMATION_ROW: Prefs.setAnimation(!Prefs.animation()); break;

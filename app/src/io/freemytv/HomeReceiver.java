@@ -17,6 +17,7 @@ public class HomeReceiver extends BroadcastReceiver {
             Maintenance.schedule(context);
             VpnGuard.schedule(context);
             VpnServers.schedule(context);
+            PauseSaver.schedule(context);
         } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
             AppLog.w("the app was updated to " + Updater.installed(context));
             Updater.announce(context);   // an update started from Settings: say it is done
@@ -26,6 +27,7 @@ public class HomeReceiver extends BroadcastReceiver {
             Maintenance.schedule(context);
             VpnGuard.schedule(context);
             VpnServers.schedule(context);
+            PauseSaver.schedule(context);
         } else if (Maintenance.ACTION.equals(action)) {
             if (Prefs.maintenance()) ModeJob.schedule(context, ModeJob.MAINTENANCE, "", 0);
             Maintenance.schedule(context);   // the next night
@@ -37,6 +39,9 @@ public class HomeReceiver extends BroadcastReceiver {
         } else if (VpnServers.ACTION.equals(action)) {
             if (Prefs.serverPick()) ModeJob.schedule(context, ModeJob.SERVERS, "auto", 0);
             VpnServers.schedule(context);       // the next time, in a few hours
+        } else if (PauseSaver.ACTION.equals(action)) {
+            ModeJob.schedule(context, ModeJob.PAUSE, "", 0);
+            PauseSaver.schedule(context);        // the next look, in two minutes
         } else if (SleepTimer.ACTION.equals(action)) {
             ModeJob.schedule(context, ModeJob.SLEEP, "", 0);
         }

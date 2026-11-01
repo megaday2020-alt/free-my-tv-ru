@@ -173,13 +173,19 @@ final class Prefs {
     static void setSaverWeather(boolean on) { put("saverWeather", on); }
     static boolean saverNews() { return sp().getBoolean("saverNews", true); }
     static void setSaverNews(boolean on) { put("saverNews", on); }
-    /** Index into NewsFeed.NAMES. */
-    static int newsSource() { return Math.max(0, Math.min(sp().getInt("newsSource", 0), NewsFeed.NAMES.length - 1)); }
-    static void setNewsSource(int i) { sp().edit().putInt("newsSource", i).apply(); version++; }
+    /** The news sources on, one bit each (the order of NewsFeed.NAMES): Topor, Ateo Breaking and RIA at first. */
+    static int newsMask() { return sp().getInt("newsMask", 7); }
+    static void setNewsSource(int i, boolean on) { sp().edit().putInt("newsMask", on ? newsMask() | (1 << i) : newsMask() & ~(1 << i)).apply(); version++; }
+    /** Only the important posts: 0 off, 1 more, 2 usual, 3 only the main ones. */
+    static int newsImportant() { return Math.max(0, Math.min(sp().getInt("newsImportant", 2), 3)); }
+    static void setNewsImportant(int i) { sp().edit().putInt("newsImportant", i).apply(); version++; }
     /** Minutes until the screensaver goes to economy (a dim clock on black); 0 = never. */
     static int saverEcoMinutes() { return sp().getInt("saverEco", 10); }
     static void setSaverEcoMinutes(int m) { sp().edit().putInt("saverEco", m).apply(); version++; }
-    static boolean saverRates() { return sp().getBoolean("saverRates", true); }
+    /** Minutes of no use, with nothing playing, until the screensaver starts over an app that keeps the screen on; 0 = never. */
+    static int pauseSaverMinutes() { return sp().getInt("pauseSaver", 10); }
+    static void setPauseSaverMinutes(int m) { sp().edit().putInt("pauseSaver", m).apply(); version++; PauseSaver.schedule(app); }
+    static boolean saverRates() { return sp().getBoolean("saverRates", false); }
     static void setSaverRates(boolean on) { put("saverRates", on); }
     static boolean saverLink() { return sp().getBoolean("saverLink", true); }
     static void setSaverLink(boolean on) { put("saverLink", on); }

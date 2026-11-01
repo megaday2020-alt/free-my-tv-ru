@@ -14,7 +14,7 @@ import android.os.PersistableBundle;
  */
 public class ModeJob extends JobService {
     static final String APPLY = "apply", VERIFY = "verify", REVERT = "revert", MEMORY = "memory", REMOTE = "remote", MAINTENANCE = "maintenance",
-            VPNGUARD = "vpnguard", SLEEP = "sleep", SERVERS = "servers";
+            VPNGUARD = "vpnguard", SLEEP = "sleep", SERVERS = "servers", PAUSE = "pausesaver";
 
     @Override public boolean onStartJob(JobParameters params) {
         PersistableBundle extras = params.getExtras();
@@ -32,6 +32,7 @@ public class ModeJob extends JobService {
                     case MAINTENANCE: Maintenance.runNow(app, !"test".equals(mode)); break;
                     case VPNGUARD: VpnGuard.checkNow(app); break;
                     case SLEEP: SleepTimer.fireNow(app); break;
+                    case PAUSE: PauseSaver.checkNow(app); break;
                     case SERVERS: VpnServers.run(app, mode.isEmpty() ? "auto" : mode); break;
                     default: break;
                 }
