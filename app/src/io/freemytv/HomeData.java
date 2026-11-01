@@ -443,6 +443,47 @@ final class HomeData {
         return out;
     }
 
+    /** Any address or place (OpenStreetMap's Nominatim, free, no key): {label, "", lat, lon}. */
+    static List<String[]> findPlace(String text) throws Exception {
+        String url = "https://nominatim.openstreetmap.org/search?format=json&limit=8&accept-language=" + Ui.language
+                + "&q=" + URLEncoder.encode(text.trim(), "UTF-8");
+        IOException last = null;
+        String body = null;
+        for (int attempt = 0; attempt < 3 && body == null; attempt++) {
+            HttpURLConnection c = open(url, attempt);
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(10000);
+            c.setRequestProperty("User-Agent", "FreeMyTV/1.9 (Android TV home screen)");
+            try {
+                if (c.getResponseCode() != 200) throw new IOException("HTTP " + c.getResponseCode());
+                try (InputStream in = c.getInputStream()) {
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[8192];
+                    int n;
+                    while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+                    body = out.toString(StandardCharsets.UTF_8.name());
+                }
+            } catch (IOException e) {
+                last = e;
+            } finally {
+                c.disconnect();
+            }
+        }
+        if (body == null) throw last;
+        JSONArray results = new JSONArray(body);
+        List<String[]> out = new ArrayList<>();
+        for (int i = 0; i < results.length(); i++) {
+            JSONObject r = results.getJSONObject(i);
+            String[] parts = r.optString("display_name", "").split(", ");
+            StringBuilder label = new StringBuilder();
+            for (int p = 0; p < parts.length && p < 3; p++) label.append(p > 0 ? ", " : "").append(parts[p]);
+            if (parts.length > 3) label.append(", ").append(parts[parts.length - 1]);
+            if (label.length() == 0) continue;
+            out.add(new String[] {label.toString(), "", r.optString("lat"), r.optString("lon")});
+        }
+        return out;
+    }
+
     // MARK: - Yandex Weather's public page (current conditions only; the forecast stays with the first source)
 
     private static final String BROWSER_UA = "Mozilla/5.0 (Linux; Android 10; Mediaroom) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";

@@ -24,26 +24,32 @@ final class Route {
         return c.getSharedPreferences("route", Context.MODE_PRIVATE);
     }
 
+    /** The points changed: the saved time belongs to the old trip. */
+    static void reset(Context c) {
+        sp(c).edit().clear().apply();
+    }
+
     /** True when both points are set: otherwise the card is not shown. */
     static boolean configured() {
         return POINT.matcher(Prefs.routeFrom()).matches() && POINT.matcher(Prefs.routeTo()).matches();
     }
 
     private static final Pattern ROUTE = Pattern.compile(
-            "\"distance\":\\{\"value\":([0-9.]+),\"text\":\"[^\"]*\"\\},\"duration\":[0-9.]+,\"durationInTraffic\":([0-9.]+),\"bounds\"");
+            "\"tollPosts\":\\[([^\\]]*)\\],\"distance\":\\{\"value\":([0-9.]+),\"text\":\"[^\"]*\"\\},\"duration\":[0-9.]+,\"durationInTraffic\":([0-9.]+),\"bounds\"");
 
-    /** Seconds (with traffic) and meters of the quickest route on the Yandex Maps page; throws if there is none. */
+    /** Seconds (with traffic) and meters of the quickest route without tolls on the Yandex Maps page; throws if there is none. */
     static long[] parse(String page) throws Exception {
         java.util.regex.Matcher m = ROUTE.matcher(page);
         double bestSec = -1, bestM = 0;
         while (m.find()) {
-            double sec = Double.parseDouble(m.group(2));
+            if (!m.group(1).trim().isEmpty()) continue;   // a road with toll posts: only free ones
+            double sec = Double.parseDouble(m.group(3));
             if (bestSec < 0 || sec < bestSec) {
                 bestSec = sec;
-                bestM = Double.parseDouble(m.group(1));
+                bestM = Double.parseDouble(m.group(2));
             }
         }
-        if (bestSec <= 0) throw new Exception("no route on the page");
+        if (bestSec <= 0) throw new Exception("no free route on the page");
         return new long[] {Math.round(bestSec), Math.round(bestM)};
     }
 

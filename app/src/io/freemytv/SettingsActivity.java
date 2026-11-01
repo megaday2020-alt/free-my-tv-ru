@@ -133,6 +133,9 @@ public class SettingsActivity extends Activity {
         private static final int PICK_CITY = 0;
         private final List<String[]> cities = new ArrayList<>();
         private String cityStatus = "";
+        private String routeStatus = "";
+        private boolean routeStatusFrom;
+        private static final int PICK_FROM = -1, PICK_TO = -2;   // the road card's points (a place search, like the city)
         private final RectF tmp = new RectF(), rowRect = new RectF(), focusBox = new RectF();
         private JSONObject state = new JSONObject(), recs = new JSONObject();
         private boolean hasKey;
@@ -611,7 +614,11 @@ public class SettingsActivity extends Activity {
                         if (e.getRepeatCount() == 0) backDown = true;
                     } else {
                         if (backDown && !e.isCanceled()) {
-                            if (screen == PICKER && pickFor == PICK_CITY) {
+                            if (screen == PICKER && pickFor < 0) {
+                                group = 4;
+                                focus = rowOf(pickFor == PICK_FROM ? ROUTE_FROM_ROW : ROUTE_TO_ROW);
+                                screen = HOME_SETTINGS;
+                            } else if (screen == PICKER && pickFor == PICK_CITY) {
                                 group = 1;
                                 focus = rowOf(CITY_ROW);
                                 screen = HOME_SETTINGS;
@@ -642,13 +649,14 @@ public class SettingsActivity extends Activity {
         // Home Settings are grouped: the list of groups (HOME_GROUPS), then the rows of one group (HOME_SETTINGS).
         private static final int LANG_ROW = 0, TEMP_ROW = 1, THEME_ROW = 2, WEATHER_ROW = 3, CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7,
                 MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, LOG_ROW = 14,
-                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_IMPORTANT_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_ROUTE_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23, SAVER_PAUSE_ROW = 24,
+                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_IMPORTANT_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_ROUTE_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23, SAVER_PAUSE_ROW = 24, ROUTE_FROM_ROW = 25, ROUTE_TO_ROW = 26, ROUTE_NAME_ROW = 27,
                 NEWS_SRC_ROW = 30;   // 30..34: one switch per news source (NewsFeed.NAMES)
         private static final int[][] GROUP_ROWS = {
                 {LANG_ROW, TEMP_ROW, THEME_ROW, ANIMATION_ROW, SOUNDS_ROW, WARM_ROW},   // look
                 {WEATHER_ROW, CITY_ROW},                                                // weather
-                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_ROUTE_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW, SAVER_PAUSE_ROW},   // screensaver
+                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW, SAVER_PAUSE_ROW},   // screensaver
                 {SAVER_NEWS_ROW, NEWS_IMPORTANT_ROW, NEWS_SRC_ROW, NEWS_SRC_ROW + 1, NEWS_SRC_ROW + 2, NEWS_SRC_ROW + 3, NEWS_SRC_ROW + 4},   // screensaver news
+                {SAVER_ROUTE_ROW, ROUTE_FROM_ROW, ROUTE_TO_ROW, ROUTE_NAME_ROW},        // road card
                 {VPN_GUARD_ROW, SERVER_ROW, MAINTENANCE_ROW},                           // VPN and upkeep
                 {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
         private int group;
@@ -673,13 +681,13 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] groupLabels() {
-            return Ui.ru ? new String[] {"Вид", "Погода", "Заставка", "Новости заставки", "VPN и обслуживание", "Приложение"}
-                    : new String[] {Ui.tr("Aparência", "Look"), Ui.tr("Clima", "Weather"), "Screensaver", "Screensaver news", Ui.tr("VPN e manutenção", "VPN and upkeep"), Ui.tr("Aplicativo", "App")};
+            return Ui.ru ? new String[] {"Вид", "Погода", "Заставка", "Новости заставки", "Дорога", "VPN и обслуживание", "Приложение"}
+                    : new String[] {Ui.tr("Aparência", "Look"), Ui.tr("Clima", "Weather"), "Screensaver", "Screensaver news", "Road", Ui.tr("VPN e manutenção", "VPN and upkeep"), Ui.tr("Aplicativo", "App")};
         }
 
         private String[] groupValues() {
-            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, дорога, яркость", "каналы, только важное", "страж, серверы", "обновление, журнал"}
-                    : new String[] {"language, theme, animation", "widget, city", "clock, weather, rates", "channels, important only", "guard, servers", "update, log"};
+            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, яркость", "каналы, только важное", "откуда и куда, выключатель", "страж, серверы", "обновление, журнал"}
+                    : new String[] {"language, theme, animation", "widget, city", "clock, weather, brightness", "channels, important only", "from, to, switch", "guard, servers", "update, log"};
         }
 
         private String[] labelsNow() {
@@ -711,7 +719,10 @@ public class SettingsActivity extends Activity {
                 case SAVER_NEWS_ROW: return Ui.ru ? "Новости" : "News";
                 case SAVER_ECO_ROW: return Ui.ru ? "Экономия экрана" : "Screen economy";
                 case SAVER_PAUSE_ROW: return Ui.ru ? "Заставка при паузе" : "Screensaver when idle";
-                case SAVER_ROUTE_ROW: return Ui.ru ? "Дорога до дома" : "Road home";
+                case SAVER_ROUTE_ROW: return Ui.ru ? "Показывать дорогу" : "Show the road";
+                case ROUTE_FROM_ROW: return Ui.ru ? "Откуда (точка А)" : "From (point A)";
+                case ROUTE_TO_ROW: return Ui.ru ? "Куда (точка Б)" : "To (point B)";
+                case ROUTE_NAME_ROW: return Ui.ru ? "Название карточки" : "Card title";
                 case SAVER_LINK_ROW: return Ui.ru ? "Состояние связи" : "Connection";
                 case NEWS_IMPORTANT_ROW: return Ui.ru ? "Только важное" : "Important only";
                 case NEWS_SRC_ROW: case NEWS_SRC_ROW + 1: case NEWS_SRC_ROW + 2: case NEWS_SRC_ROW + 3: case NEWS_SRC_ROW + 4:
@@ -758,6 +769,9 @@ public class SettingsActivity extends Activity {
                     return m == 0 ? (Ui.ru ? "Никогда" : "Never") : (Ui.ru ? "Через " + m + " мин" : "After " + m + " min");
                 }
                 case SAVER_ROUTE_ROW: return onOff(Prefs.saverRoute());
+                case ROUTE_FROM_ROW: return !routeStatus.isEmpty() && routeStatusFrom ? routeStatus : pointValue(Prefs.routeFrom(), Prefs.routeFromLabel());
+                case ROUTE_TO_ROW: return !routeStatus.isEmpty() && !routeStatusFrom ? routeStatus : pointValue(Prefs.routeTo(), Prefs.routeToLabel());
+                case ROUTE_NAME_ROW: return Prefs.routeName().isEmpty() ? (Ui.ru ? "Дорога" : "Road") : Prefs.routeName();
                 case SAVER_LINK_ROW: return onOff(Prefs.saverLink());
                 case NEWS_IMPORTANT_ROW: {
                     int level = Prefs.newsImportant();
@@ -861,7 +875,7 @@ public class SettingsActivity extends Activity {
                     break;
                 }
                 case WEATHER_ROW: Prefs.setWeather(!Prefs.weather()); break;
-                case CITY_ROW: return;
+                case CITY_ROW: case ROUTE_FROM_ROW: case ROUTE_TO_ROW: case ROUTE_NAME_ROW: return;
                 case REPORT_ROW: if (dir > 0) showReport(); return;
                 case UPDATE_ROW: if (dir > 0) updateAction(); return;
                 case WARM_ROW: Prefs.setWarm(Prefs.warm() > 0 ? 0 : 1); return;
@@ -996,6 +1010,85 @@ public class SettingsActivity extends Activity {
             dialog.show();
         }
 
+        private String pointValue(String latLon, String label) {
+            if (latLon.isEmpty()) return "—";
+            String t = label.isEmpty() ? (Ui.ru ? "задана" : "set") : label;
+            return t.length() > 34 ? t.substring(0, 33) + "…" : t;
+        }
+
+        private void askPlace(boolean from) {
+            if (!routeStatus.isEmpty() && routeStatus.equals(Ui.ru ? "Ищу…" : "Searching…")) return;
+            EditText field = new EditText(activity);
+            field.setSingleLine(true);
+            field.setHint(Ui.ru ? "Адрес или место, например: Шаховская" : "Address or place, e.g. Boston");
+            field.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+            AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(from ? (Ui.ru ? "Откуда (точка А)" : "From (point A)") : (Ui.ru ? "Куда (точка Б)" : "To (point B)"))
+                    .setView(field)
+                    .setPositiveButton(Ui.ru ? "Найти" : "Search", (d, which) -> searchPlace(field.getText().toString(), from))
+                    .setNegativeButton(Ui.ru ? "Отмена" : "Cancel", null)
+                    .create();
+            field.setOnEditorActionListener((v, action, event) -> {
+                dialog.dismiss();
+                searchPlace(field.getText().toString(), from);
+                return true;
+            });
+            dialog.show();
+        }
+
+        private void askRouteName() {
+            EditText field = new EditText(activity);
+            field.setSingleLine(true);
+            field.setText(Prefs.routeName());
+            field.setHint(Ui.ru ? "Например: Домой" : "e.g. Home");
+            field.setImeOptions(EditorInfo.IME_ACTION_DONE);
+            AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(Ui.ru ? "Название карточки" : "Card title")
+                    .setView(field)
+                    .setPositiveButton("OK", (d, which) -> { Prefs.setRouteName(field.getText().toString()); invalidate(); })
+                    .setNegativeButton(Ui.ru ? "Отмена" : "Cancel", null)
+                    .create();
+            field.setOnEditorActionListener((v, action, event) -> {
+                dialog.dismiss();
+                Prefs.setRouteName(field.getText().toString());
+                invalidate();
+                return true;
+            });
+            dialog.show();
+        }
+
+        private void searchPlace(String text, boolean from) {
+            if (text.trim().isEmpty()) return;
+            routeStatusFrom = from;
+            routeStatus = Ui.ru ? "Ищу…" : "Searching…";
+            invalidate();
+            new Thread(() -> {
+                List<String[]> found;
+                String error;
+                try {
+                    found = HomeData.findPlace(text);
+                    error = found.isEmpty() ? (Ui.ru ? "Ничего не найдено." : "Nothing found.") : "";
+                } catch (Exception e) {
+                    found = new ArrayList<>();
+                    error = (Ui.ru ? "Не получилось найти: " : "Couldn't search: ") + e.getMessage();
+                    AppLog.w("place search: " + e.getMessage());
+                }
+                List<String[]> result = found;
+                String message = error;
+                handler.post(() -> {
+                    routeStatus = message;
+                    if (!result.isEmpty() && screen == HOME_SETTINGS) {
+                        cities.clear();
+                        cities.addAll(result);
+                        openPicker(from ? PICK_FROM : PICK_TO);
+                        spoken.focusMoved();
+                    }
+                    invalidate();
+                    if (!message.isEmpty()) handler.postDelayed(() -> { routeStatus = ""; invalidate(); }, 4000);
+                });
+            }).start();
+        }
+
         private void searchCity(String name) {
             if (name.trim().isEmpty()) return;
             cityStatus = Ui.tr("Procurando…", "Searching…");
@@ -1115,7 +1208,7 @@ public class SettingsActivity extends Activity {
         private void openPicker(int which) {
             pickFor = which;
             pickLabels.clear();
-            if (which == PICK_CITY) {
+            if (which <= PICK_CITY) {
                 for (String[] city : cities) pickLabels.add(city[0]);
                 pickCurrent = -1;
             } else {
@@ -1132,7 +1225,7 @@ public class SettingsActivity extends Activity {
         /** A long list (the apps): nine rows at a time, the one in use checked. */
         private void drawPicker(Canvas c) {
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
-            String title = pickFor == PICK_CITY ? Ui.tr("Cidade", "City") : keyLabels()[pickFor - 1];
+            String title = pickFor == PICK_CITY ? Ui.tr("Cidade", "City") : pickFor < 0 ? (pickFor == PICK_FROM ? (Ui.ru ? "Откуда" : "From") : (Ui.ru ? "Куда" : "To")) : keyLabels()[pickFor - 1];
             c.drawText(title, LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             int rows = rowCount();
             for (int i = 0; i < rows; i++) {
@@ -1141,7 +1234,7 @@ public class SettingsActivity extends Activity {
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
                 rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
-                c.drawText(pickLabels.get(at), rowRect.left + 30 * k, rowRect.centerY() + Ui.halfCap(rowLabel), rowLabel);
+                c.drawText(TextUtils.ellipsize(pickLabels.get(at), new TextPaint(rowLabel), (LIST_R - LIST_X - 120) * k, TextUtils.TruncateAt.END).toString(), rowRect.left + 30 * k, rowRect.centerY() + Ui.halfCap(rowLabel), rowLabel);
                 if (at == pickCurrent) {
                     float cw = Symbols.width(getContext(), "check", 26 * k);
                     Symbols.draw(getContext(), c, "check", rowRect.right - 30 * k - cw / 2, rowRect.centerY(), 26 * k, blend(0xFFFFFFFF, INK, f));
@@ -1198,6 +1291,14 @@ public class SettingsActivity extends Activity {
                 }
                 screen = MAIN;
                 focus = 0;
+            } else if (screen == PICKER && pickFor < 0) {
+                String[] place = cities.get(pickScroll + focus);
+                boolean from = pickFor == PICK_FROM;
+                Prefs.setRoutePoint(from, place[2] + "," + place[3], place[0]);
+                Route.reset(c);
+                group = 4;
+                focus = rowOf(from ? ROUTE_FROM_ROW : ROUTE_TO_ROW);
+                screen = HOME_SETTINGS;
             } else if (screen == PICKER && pickFor == PICK_CITY) {
                 String[] city = cities.get(pickScroll + focus);
                 Prefs.setCity(city[1], city[2], city[3]);
@@ -1222,6 +1323,12 @@ public class SettingsActivity extends Activity {
                 focus = 0;
             } else if (screen == HOME_SETTINGS && rows()[focus] == CITY_ROW) {
                 askCity();
+                return;
+            } else if (screen == HOME_SETTINGS && (rows()[focus] == ROUTE_FROM_ROW || rows()[focus] == ROUTE_TO_ROW)) {
+                askPlace(rows()[focus] == ROUTE_FROM_ROW);
+                return;
+            } else if (screen == HOME_SETTINGS && rows()[focus] == ROUTE_NAME_ROW) {
+                askRouteName();
                 return;
             } else if (screen == HOME_SETTINGS) {
                 adjust(1);

@@ -115,6 +115,17 @@ final class Prefs {
         e.apply();
     }
 
+    static String routeFromLabel() { return sp().getString("routeFromLabel", "").trim(); }
+    static String routeToLabel() { return sp().getString("routeToLabel", "").trim(); }
+
+    /** A point picked on the TV: "lat,lon" and the name it was found by. */
+    static void setRoutePoint(boolean from, String latLon, String label) {
+        sp().edit().putString(from ? "routeFrom" : "routeTo", latLon).putString(from ? "routeFromLabel" : "routeToLabel", label).apply();
+        version++;
+    }
+
+    static void setRouteName(String name) { put("routeName", name.trim()); }
+
     static String routeFrom() { return sp().getString("routeFrom", "").trim(); }
     static String routeTo() { return sp().getString("routeTo", "").trim(); }
     static String routeName() { return sp().getString("routeName", "").trim(); }
