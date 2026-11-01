@@ -33,7 +33,9 @@ final class NewsFeed {
     private static final int FIRST_RSS = 2;
     private static final float CURATED = 99f, UNRATED = -1f;
     private static final float[] THRESHOLDS = {0f, 1.15f, 1.3f, 1.7f};   // Prefs.newsImportant(): off, more, usual, only the main ones
-    private static final int SHOWN = 14;
+    private static final int SHOWN = 18;
+    /** A message that long fills three lines of the card: longer ones are not shown. */
+    private static final int MAX_CHARS = 135;
     private static final long FRESH_MS = 10 * 60_000L, MAX_AGE_MS = 24 * 3_600_000L;
     private static final Pattern ITEM = Pattern.compile("<item>(.*?)</item>", Pattern.DOTALL);
     private static final Pattern DATE = Pattern.compile("<pubDate>(.*?)</pubDate>", Pattern.DOTALL);
@@ -112,7 +114,7 @@ final class NewsFeed {
         List<String> out = new ArrayList<>();
         for (Item it : unique) {
             if (out.size() >= SHOWN) break;
-            out.add(hm.format(new java.util.Date(it.at)) + "\t" + it.tags + "\t" + fit(it.title));
+            out.add(hm.format(new java.util.Date(it.at)) + "\t" + it.tags + "\t" + it.title);
         }
         return out;
     }
@@ -159,7 +161,7 @@ final class NewsFeed {
 
     private static List<Item> load(Context c, int src, long now) {
         List<Item> out = new ArrayList<>();
-        for (String line : sp(c).getString("d" + src, "").split("\\n")) {
+        for (String line : sp(c).getString("e" + src, "").split("\\n")) {
             String[] f = line.split("\t", 3);
             if (f.length < 3) continue;
             try {
@@ -193,13 +195,13 @@ final class NewsFeed {
             boolean any = false;
             try {
                 for (int s = 0; s < NAMES.length; s++) {
-                    if ((mask & (1 << s)) == 0 || System.currentTimeMillis() - p.getLong("bt" + s, 0) < FRESH_MS) continue;
+                    if ((mask & (1 << s)) == 0 || System.currentTimeMillis() - p.getLong("ct" + s, 0) < FRESH_MS) continue;
                     try {
                         List<String> lines = s < FIRST_RSS ? parseChannel(download(URLS[s]), System.currentTimeMillis())
                                 : parseRss(download(URLS[s]), s == 2 ? UNRATED : CURATED);
                         AppLog.w("news: " + NAMES[s] + " " + lines.size());
                         if (!lines.isEmpty()) {
-                            p.edit().putString("d" + s, String.join("\n", lines)).putLong("bt" + s, System.currentTimeMillis()).apply();
+                            p.edit().putString("e" + s, String.join("\n", lines)).putLong("ct" + s, System.currentTimeMillis()).apply();
                             any = true;
                         }
                     } catch (Exception e) {
@@ -331,20 +333,8 @@ final class NewsFeed {
         if (lines.isEmpty()) return null;
         String first = lines.get(0);
         if (first.length() < 25 && lines.size() > 1) first += " " + lines.get(1);   // a lone "Срочно!" says nothing
-        if (first.length() > 110) {   // the first sentence, when it ends in a sensible place
-            int end = -1;
-            for (int i = 40; i < Math.min(first.length() - 1, 160); i++) {
-                char ch = first.charAt(i);
-                if ((ch == '.' || ch == '!' || ch == '?') && first.charAt(i + 1) == ' ') { end = i; break; }
-            }
-            if (end > 0) first = first.substring(0, end + 1);
-        }
-        if (first.length() > 160) {
-            int cut = first.lastIndexOf(' ', 157);
-            first = first.substring(0, cut > 60 ? cut : 157).replaceAll("[\\s,;:.\\-—]+$", "") + "…";
-        }
         first = first.replaceAll("[\\s,;:\\-—]+$", "");
-        return first.length() < 15 ? null : first;
+        return first.length() < 15 || first.length() > MAX_CHARS ? null : first;
     }
 
     // MARK: - RSS
@@ -357,7 +347,7 @@ final class NewsFeed {
             Matcher d = DATE.matcher(item.group(1));
             if (!t.find() || !d.find()) continue;
             String s = unescape(t.group(1)).replaceAll("\\s+", " ").trim();
-            if (s.length() < 15 || s.length() > 220) continue;
+            if (s.length() < 15 || s.length() > MAX_CHARS) continue;
             try {
                 long at = new java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss Z", java.util.Locale.ENGLISH).parse(d.group(1).trim()).getTime();
                 out.add(at + "\t" + rating + "\t" + s);

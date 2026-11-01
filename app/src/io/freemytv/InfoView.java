@@ -44,7 +44,7 @@ import java.util.Random;
  */
 final class InfoView extends FrameLayout implements HomeData.Listener {
     private static final long PAGE_MS = 30_000;
-    private static final int HEADLINES = 7;
+    private static final int HEADLINES = 6;
     private static final int WHITE = 0xFFFFFFFF, DIM = 0xB8FFFFFF, FAINT = 0x70FFFFFF, CARD = 0x17FFFFFF, CARD_EDGE = 0x2AFFFFFF;
     private static final int WARM = 0xFFFFB35C, BLUE = 0xFF6FB1FF, GREEN = 0xFF63E0A3, VIOLET = 0xFFB69CFF;
 
@@ -345,11 +345,11 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         headlineBox = new LinearLayout(c);
         headlineBox.setOrientation(LinearLayout.VERTICAL);
         for (int i = 0; i < HEADLINES; i++) {
-            TextView t = text(c, Ui.medium, 32, WHITE);
-            t.setLineSpacing(0, 1.12f);
-            t.setMaxLines(2);
+            TextView t = text(c, Ui.medium, 30, WHITE);
+            t.setLineSpacing(0, 1.1f);
+            t.setMaxLines(3);
             t.setEllipsize(TextUtils.TruncateAt.END);
-            t.setPadding(0, Math.round(22 * u), 0, 0);
+            t.setPadding(0, Math.round(18 * u), 0, 0);
             headlineRows.add(t);
             headlineBox.addView(t);
         }
@@ -527,6 +527,14 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         glowA.setColor(a);
         glowB.setColor(b);
         scrim.setAlpha(eco ? 0f : dimming());
+        if (running) Backlight.set(getContext(), backlight());
+    }
+
+    /** The panel's backlight in percent while the screensaver is on (0 = leave it as the person set it). */
+    private int backlight() {
+        if (eco) return 8;
+        int level = Prefs.saverBrightness();
+        return level == 3 ? 0 : level == 1 ? 25 : level == 2 ? 50 : data.weather.isDay ? 55 : 30;
     }
 
     /** 0 = leave as it is, up to 0.6 = much darker. Brightness in Settings: Auto (dark at night), Dim, Medium, Bright. */
@@ -554,6 +562,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         glowA.animate().alpha(0f).setDuration(1500).start();
         glowB.animate().alpha(0f).setDuration(1500).start();
         scrim.setAlpha(0f);
+        Backlight.set(getContext(), backlight());
         ecoClock.setAlpha(0f);
         ecoClock.setVisibility(View.VISIBLE);
         ecoClock.animate().alpha(1f).setDuration(1500).start();
@@ -608,6 +617,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         motion.clear();
         handler.removeCallbacksAndMessages(null);
         data.removeListener(this);
+        Backlight.restore(getContext());
     }
 
     @Override protected void onDetachedFromWindow() {

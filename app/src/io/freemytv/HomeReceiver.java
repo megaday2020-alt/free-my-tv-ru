@@ -13,6 +13,7 @@ public class HomeReceiver extends BroadcastReceiver {
         String action = intent.getAction();
         if (Intent.ACTION_BOOT_COMPLETED.equals(action)) {
             AppLog.w("the TV booted");
+            Backlight.restore(context);
             HomeMode.bootCheck(context);
             Maintenance.schedule(context);
             VpnGuard.schedule(context);

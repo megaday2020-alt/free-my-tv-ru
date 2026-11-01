@@ -177,7 +177,7 @@ final class Prefs {
     static int newsMask() { return sp().getInt("newsMask", 7); }
     static void setNewsSource(int i, boolean on) { sp().edit().putInt("newsMask", on ? newsMask() | (1 << i) : newsMask() & ~(1 << i)).apply(); version++; }
     /** Only the important posts: 0 off, 1 more, 2 usual, 3 only the main ones. */
-    static int newsImportant() { return Math.max(0, Math.min(sp().getInt("newsImportant", 2), 3)); }
+    static int newsImportant() { return Math.max(0, Math.min(sp().getInt("newsImportant", 0), 3)); }
     static void setNewsImportant(int i) { sp().edit().putInt("newsImportant", i).apply(); version++; }
     /** Minutes until the screensaver goes to economy (a dim clock on black); 0 = never. */
     static int saverEcoMinutes() { return sp().getInt("saverEco", 10); }
