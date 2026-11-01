@@ -26,6 +26,7 @@ command -v "$JAVAC" >/dev/null 2>&1 || { echo "JDK not found. Install JDK 17 and
 CFG=config.properties
 OUT_APK=FreeMyTV.apk
 if [ "${1:-}" = "--generic" ]; then CFG=config.generic.properties; OUT_APK=FreeMyTV-generic.apk; fi
+if [ "${1:-}" = "--dacha" ]; then CFG=config.dacha.properties; OUT_APK=FreeMyTV-dacha.apk; fi
 if [ ! -f "$CFG" ]; then
   cp config.example.properties "$CFG"
   echo "Created $CFG: add your TMDB key and your city there (optional), then build again."

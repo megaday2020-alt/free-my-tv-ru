@@ -38,6 +38,7 @@ final class Prefs {
 
     static void init(Context c) {
         app = c.getApplicationContext();
+        pinLocation();
         migrateKeys();   // before anything reads the button choices
         Ui.applyLanguage();   // the language picked on the TV, now that it can be read
     }
@@ -89,6 +90,18 @@ final class Prefs {
     /** The place of the TV's time zone, for a generic build; null when the build has its own city (or the zone is unknown). */
     private static String[] zonePlace() {
         return Config.AUTO_LOCATION ? Zones.guess(app) : null;
+    }
+
+    /**
+     * A build made for one place (its own city in config.properties) saves that place on the TV the first time it runs. A later
+     * update from GitHub is the generic build, which would otherwise guess the city from the time zone: the saved place wins.
+     */
+    private static void pinLocation() {
+        if (Config.AUTO_LOCATION || Config.CITY.isEmpty()) return;
+        SharedPreferences p = sp();
+        if (p.contains("latitude") || p.contains("city")) return;
+        p.edit().putString("city", Config.CITY).putString("latitude", Config.LATITUDE).putString("longitude", Config.LONGITUDE).apply();
+        AppLog.w("location saved on the TV: " + Config.CITY);
     }
 
     static String city() {

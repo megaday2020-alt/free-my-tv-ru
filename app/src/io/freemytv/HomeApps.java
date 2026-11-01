@@ -58,7 +58,7 @@ final class HomeApps {
     /** The "HDMI Inputs" button: opens the bottom drawer on the inputs (the home screen handles it). */
     static final int INPUTS = 7;
     /** Quick actions in the bottom drawer (run through the TV's own ADB by the home screen). */
-    static final int REBOOT = 8, SLEEP = 9, CLEAN = 10, SLEEP_TIMER = 11, SERVER_PICK = 12, NET_CHECK = 13;
+    static final int REBOOT = 8, SLEEP = 9, CLEAN = 10, SLEEP_TIMER = 11, SERVER_PICK = 12, NET_CHECK = 13, KILL_ALL = 14;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -234,6 +234,7 @@ final class HomeApps {
         items.add(shortcut(SERVER_PICK, "serverpick", Ui.ru ? "Сервер VPN" : Ui.tr("Servidor VPN", "VPN server"), "check"));
         items.add(shortcut(NET_CHECK, "netcheck", Ui.ru ? "Проверить сеть" : Ui.tr("Testar a rede", "Check network"), "wifi"));
         items.add(shortcut(CLEAN, "clean", Ui.ru ? "Очистить кэш" : Ui.tr("Limpar cache", "Clear cache"), "sparkles"));
+        items.add(shortcut(KILL_ALL, "killall", Ui.ru ? "Закрыть все" : Ui.tr("Fechar tudo", "Close all"), "close"));
         items.add(shortcut(REBOOT, "reboot", Ui.ru ? "Перезагрузить" : Ui.tr("Reiniciar", "Restart"), "sync"));
         return items;
     }
@@ -248,11 +249,11 @@ final class HomeApps {
         return it;
     }
 
-    /** For the bottom drawer: live TV and every HDMI input (the ones with no device are shown dimmed). */
+    /** For the bottom drawer: live TV and the HDMI inputs with a device sending a signal (empty ports would only crowd it). */
     static List<Item> allInputs(Context c) {
         List<Item> items = new ArrayList<>();
         if (liveTv(c) != null) items.add(shortcut(LIVE_TV, "live", Ui.tr("TV ao Vivo", "Live TV"), "tv"));
-        items.addAll(inputs(c, true));
+        items.addAll(inputs(c, false));
         return items;
     }
 

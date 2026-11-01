@@ -126,7 +126,7 @@ final class VpnGuard {
     /** One check (on a background thread, from ModeJob). */
     static void checkNow(Context c) {
         Snapshot.maybe(c);
-        if (!Prefs.vpnGuard()) return;
+        if (!Prefs.vpnGuard() || VpnServers.vpnHeldOff) return;   // off on purpose while the servers are being tested
         try {
             c.getPackageManager().getPackageInfo(V2RAYTUN, 0);
         } catch (PackageManager.NameNotFoundException e) {

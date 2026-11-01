@@ -206,6 +206,18 @@ final class HomeData {
                     } catch (Exception e) {
                         AppLog.w("yandex weather: " + e.getMessage());   // keep the other source's numbers
                     }
+                    try {   // neither source above sees local fog; Open-Meteo's model does (when it is reachable)
+                        JSONObject cur = new JSONObject(get("https://api.open-meteo.com/v1/forecast?latitude=" + Prefs.latitude()
+                                + "&longitude=" + Prefs.longitude() + "&current=weather_code,visibility")).getJSONObject("current");
+                        int wc = cur.getInt("weather_code");
+                        if ((wc == 45 || wc == 48) && fresh.code < 45) {
+                            fresh.code = 45;
+                            cache.edit().putInt("yaCode", 45).apply();   // a restart reads the sky from there
+                            AppLog.w("fog check: Open-Meteo sees fog");
+                        }
+                    } catch (Exception e) {
+                        AppLog.w("fog check: " + e.getMessage());
+                    }
                     weather = fresh;
                     weatherAt = System.currentTimeMillis();
                     cache.edit().putString("weather6", body).putLong("weatherAt", weatherAt).putString("weatherPlace", weatherPlace()).apply();

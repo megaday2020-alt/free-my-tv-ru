@@ -24,10 +24,32 @@ final class RemoteKeys {
      * The key codes are the brand's own: on other brands they can be other buttons, so nothing here runs there.
      * Vestel builds TVs sold under other brands (F&U...), so BRAND varies: check the maker too.
      */
-    static final boolean TCL = is("TCL"), VESTEL = is("Vestel");
+    static final boolean TCL = is("TCL"), VESTEL = is("Vestel"), XIAOMI = is("Xiaomi");
+
+    /**
+     * Xiaomi's six app buttons (Ivi, Okko, Kion, VK Video, Rutube, Wink) arrive as BUTTON_1..16, which the TV hands to its own
+     * key receiver after the key filter. Value: a package to open instead, or NONE to swallow the key; a key not listed here
+     * is left to the system (so the VK Video button keeps working). While DISCOVER is on, every one of them is swallowed and
+     * logged ("xiaomi remote key"), to find out which code is which button without launching anything.
+     */
+    static final String NONE = "none";
+    static final boolean DISCOVER = false;
+    private static final java.util.Map<Integer, String> XIAOMI_KEYS = new java.util.HashMap<>();
+    static {   // codes read from this remote's log (Mi TV MOOQ1): 188 is VK Video, left to the system
+        XIAOMI_KEYS.put(199, "org.smarttube.stable");    // Ivi
+        XIAOMI_KEYS.put(200, "com.kinopub");             // Okko
+        XIAOMI_KEYS.put(203, "com.v2raytun.android");    // Rutube
+        XIAOMI_KEYS.put(197, "ru.kinopoisk.tv");         // Wink
+        XIAOMI_KEYS.put(198, NONE);                      // Kion: nothing
+    }
 
     static boolean supported() {
         return TCL || VESTEL;
+    }
+
+    /** The key service also runs on Xiaomi, which has no Remote Buttons screen (its mapping is in this file). */
+    static boolean serviceNeeded() {
+        return supported() || XIAOMI;
     }
 
     private static boolean is(String maker) {
@@ -36,6 +58,7 @@ final class RemoteKeys {
 
     /** Opens the app for this key on its first press. True if the key is ours and in use (it is then consumed). */
     static boolean onKey(Context c, KeyEvent e) {
+        if (XIAOMI) return xiaomiKey(c, e);
         if (!supported()) return false;
         // BUTTON_3 is also a game controller's button: keys from a gamepad or a joystick are left alone.
         int source = e.getSource();
@@ -50,6 +73,27 @@ final class RemoteKeys {
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
             Intent intent = launchIntent(c.getPackageManager(), pkg);
             AppLog.w("remote key " + e.getKeyCode() + " -> " + pkg + (intent == null ? " (not installed)" : ""));
+            if (intent != null) c.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        }
+        return true;
+    }
+
+    private static boolean xiaomiKey(Context c, KeyEvent e) {
+        int code = e.getKeyCode();
+        if (code < KeyEvent.KEYCODE_BUTTON_1 || code > KeyEvent.KEYCODE_BUTTON_16) return false;
+        int source = e.getSource();
+        if ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) return false;
+        boolean first = e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0;
+        if (DISCOVER) {
+            if (first) AppLog.w("xiaomi remote key " + code + " (scan " + e.getScanCode() + ")");
+            return true;
+        }
+        String target = XIAOMI_KEYS.get(code);
+        if (target == null) return false;
+        if (first && !target.equals(NONE)) {
+            Intent intent = launchIntent(c.getPackageManager(), target);
+            AppLog.w("xiaomi remote key " + code + " -> " + target + (intent == null ? " (not installed)" : ""));
             if (intent != null) c.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         }
         return true;

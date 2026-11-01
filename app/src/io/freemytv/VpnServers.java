@@ -62,7 +62,7 @@ final class VpnServers {
     // MARK: - The slow timer: every few hours, when nobody is using the box
 
     static final String ACTION = "io.freemytv.VPN_SERVERS";
-    private static final long EVERY = 3 * 3_600_000L;
+    private static final long EVERY = 6 * 3_600_000L;
 
     static void schedule(Context c) {
         android.app.AlarmManager am = (android.app.AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
@@ -115,12 +115,21 @@ final class VpnServers {
                 AppLog.w("vpn servers: skipped, V2RayTun is already open");
                 return;
             }
-            if (!forced && !idle(adb)) {
+            boolean night = mode.equals("night");   // 4:00, nobody is watching: an open app is put aside, not waited for
+            if (!forced && !night && !idle(adb)) {
                 AppLog.w("vpn servers: skipped, the box is in use");
                 return;
             }
             if (!ensureService(adb)) return;
             String before = topPackage(adb);
+            String reopen = null;
+            if (night && !before.isEmpty() && !before.equals(HomeMode.PKG) && !before.equals(V2)) {
+                reopen = before;
+                if (adb.shell("dumpsys media_session | grep -E 'state=PlaybackState'").contains("state=3,")) adb.shell("input keyevent 127");   // pause
+                adb.shell("input keyevent 3");   // Home: the app is minimised
+                SystemClock.sleep(1500);
+                AppLog.w("vpn servers: night run, minimised " + reopen);
+            }
             adb.shell("am start -n " + V2 + "/.ui.activity.MainActivity");
             if (!waitFor(() -> root() != null && V2.equals(String.valueOf(root().getPackageName())), 10_000)) {
                 AppLog.w("vpn servers: V2RayTun did not come up");
@@ -138,27 +147,42 @@ final class VpnServers {
                 }
                 SharedPreferences sp = c.getSharedPreferences("vpnservers", Context.MODE_PRIVATE);
                 String current = sp.getString("current", "");
-                if (mode.equals("night")) {
+                rows = loadRanking(sp);
+                boolean freshTest = rows == null || !(mode.equals("backup") || mode.equals("quick"));
+                if (freshTest) {
+                    // The newest list first (the VPN still carries that request), then the VPN goes off: with it on, the response
+                    // times would be measured through the tunnel and say nothing about the servers themselves.
                     if (openMenuAndClick("Обновить подписки")) {
                         AppLog.w("vpn servers: subscriptions refresh asked");
                         SystemClock.sleep(15_000);
                     }
+                    if (tunUp(adb)) {
+                        vpnHeldOff = true;
+                        V2RayService.banner(Ui.ru ? "Идёт выбор сервера VPN: VPN выключен примерно на минуту. Пока не нажимайте кнопки пульта" : "Picking the VPN server: the VPN is off for about a minute. Please do not press the remote for now");
+                        toggleVpn(adb);
+                        if (!waitFor(() -> !tunUp(adb), 12_000)) AppLog.w("vpn servers: the VPN did not go off, testing anyway");
+                        else AppLog.w("vpn servers: VPN off for the test");
+                        SystemClock.sleep(2_000);
+                    }
+                    toTop();
                 }
-                rows = loadRanking(sp);
-                if (rows == null || !(mode.equals("backup") || mode.equals("quick"))) {
+                boolean tested = !freshTest;
+                if (freshTest) {
                     if (openMenuAndClick("Время отклика конфигов")) {
                         waitForTest();
+                        tested = true;
                     } else {
-                        AppLog.w("vpn servers: the test button was not found");
+                        AppLog.w("vpn servers: the test button was not found (V2RayTun changed?), nothing is switched on old numbers");
                     }
                     rows = collect();
-                    saveRanking(sp, rows);
+                    if (tested) saveRanking(sp, rows);
                 }
                 dump(rows);
                 Row selected = null;
                 for (Row r : rows) if (r.selected) selected = r;
                 if (selected != null) current = selected.title;
-                Row choice = pick(rows, current, mode.equals("backup") ? current : "", sp);
+                Row choice = tested ? pick(rows, current, mode.equals("backup") ? current : "", sp) : null;
+                if (!tested) why = "the test did not run";
                 if (choice == null) {
                     AppLog.w("vpn servers: no change (" + why + ")");
                 } else {
@@ -166,15 +190,98 @@ final class VpnServers {
                     if (select(choice)) {
                         sp.edit().putString("current", choice.title).apply();
                         Health.count(c, "switches");
+                    }
+                }
+                if (vpnHeldOff) restoreVpn(adb);
+                SystemClock.sleep(4_000);
+                AppLog.w("vpn servers: VPN is " + (VpnGuard.vpnUp(c) ? "up" : "DOWN") + " after the run");
+                boolean works = connectionWorks(c);
+                if (!works && !directInternetOk(c)) {
+                    AppLog.w("vpn servers: no internet at all (router or provider), servers are not the problem");
+                } else if (!works) {   // the server that is on may be dead (V2RayTun's own marks can't always be read): walk the best ones
+                    AppLog.w("vpn servers: no real access through the VPN, trying the best servers one by one");
+                    List<Row> cands = new ArrayList<>();
+                    for (Row r : rows) if (r.valid() && r.group() != Group.OTHER && r.group() != Group.LIMITED) cands.add(r);
+                    java.util.Collections.sort(cands, (a, b) -> a.ping - b.ping);
+                    int tried = 0;
+                    for (Row r : cands) {
+                        if (tried++ >= 3) break;
+                        AppLog.w("vpn servers: trying \"" + r.title + "\" " + r.ping + " ms");
+                        if (!select(r)) continue;
                         SystemClock.sleep(6_000);
-                        AppLog.w("vpn servers: VPN is " + (VpnGuard.vpnUp(c) ? "up" : "DOWN") + " after the switch");
+                        if (connectionWorks(c)) {
+                            sp.edit().putString("current", r.title).apply();
+                            AppLog.w("vpn servers: access works through \"" + r.title + "\"");
+                            break;
+                        }
                     }
                 }
             } finally {
                 V2RayService.banner(null);
+                if (vpnHeldOff) restoreVpn(adb);   // also when something above failed: never leave the VPN off
                 back(adb, before);
+                if (reopen != null && !topPackage(adb).equals(reopen)) {   // the app that was open comes back
+                    adb.shell("monkey -p " + reopen + " -c android.intent.category.LEANBACK_LAUNCHER 1");
+                    AppLog.w("vpn servers: reopened " + reopen);
+                }
             }
         }
+    }
+
+    // MARK: - The VPN off during a test
+
+    /** True while the test has the VPN switched off on purpose: the guard must not turn it back on meanwhile. */
+    static volatile boolean vpnHeldOff;
+
+    private static boolean tunUp(Adb adb) {
+        try {
+            return !adb.shell("ip link | grep -c tun0").trim().startsWith("0");
+        } catch (java.io.IOException e) {
+            return false;
+        }
+    }
+
+    /** V2RayTun's widget button toggles the connection: call it only after looking at tun0. */
+    private static void toggleVpn(Adb adb) {
+        try {
+            adb.shell("am broadcast -n " + V2 + "/.receiver.WidgetProvider1x1 -a com.v2raytun.android.action.widget.click");
+        } catch (java.io.IOException e) {
+            AppLog.w("vpn servers: toggle failed: " + e.getMessage());
+        }
+    }
+
+    /** Turns the VPN back on (one more try if it does not come up) and lets the guard watch again. */
+    private static void restoreVpn(Adb adb) {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            if (!tunUp(adb)) toggleVpn(adb);
+            if (waitFor(() -> tunUp(adb), 20_000)) break;
+        }
+        AppLog.w("vpn servers: VPN " + (tunUp(adb) ? "back on" : "STILL OFF, the guard takes over"));
+        vpnHeldOff = false;
+    }
+
+    /** True when Android itself sees working internet outside the VPN (otherwise switching servers cannot help). */
+    private static boolean directInternetOk(Context c) {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            for (android.net.Network n : cm.getAllNetworks()) {
+                android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                if (nc != null && !nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)
+                        && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return true;
+            }
+        } catch (RuntimeException ignored) {}
+        return false;
+    }
+
+    /** True when a tiny request really gets through the VPN (three looks, 5 s apart); true as well when there is no VPN to test. */
+    private static boolean connectionWorks(Context c) {
+        for (int i = 0; i < 3; i++) {
+            if (!VpnGuard.vpnUp(c)) return true;
+            int code = VpnGuard.probe(c, "https://www.youtube.com/generate_204", 6000, false, false, new StringBuilder());
+            if (code > 0 && code < 500) return true;
+            SystemClock.sleep(5_000);
+        }
+        return false;
     }
 
     // MARK: - The decision

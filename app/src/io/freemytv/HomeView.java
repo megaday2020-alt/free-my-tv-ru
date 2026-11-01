@@ -443,6 +443,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         resumedAt = SystemClock.uptimeMillis();
         lastNanos = 0;
         lastStep = 0;
+        VpnPing.start(getContext());
+        VpnPing.kick();   // a fresh number as soon as the home screen is back
         data.addListener(this);
         recs.addListener(this);
         data.refreshIfStale();
@@ -717,17 +719,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
                 || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty();
         idle = !busy;
+        if (pingVersion != VpnPing.version) {   // the background probe has a new answer
+            pingVersion = VpnPing.version;
+            probeState = VpnPing.state;
+            probeMs = VpnPing.ms;
+            statusDirty = true;
+            status.invalidate();
+        }
         if (up - vpnCheckedAt >= 5000) {
             vpnCheckedAt = up;
             boolean vpn = vpnActive();
             int wifi = wifiLevel();
-            if (!vpn) {
-                probeState = 0;
-                probeFails = 0;
-            } else if (PROBE_ON && up - probeAt >= 15_000) {   // a real look every 15 seconds while the VPN is up
-                probeAt = up;
-                probeVpn();
-            }
             if (vpn != vpnOn || wifi != wifiBars) {
                 vpnOn = vpn;
                 wifiBars = wifi;
@@ -2283,7 +2285,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             retarget(false);
             return;
         }
-        if (it.kind == HomeApps.REBOOT || it.kind == HomeApps.SLEEP || it.kind == HomeApps.CLEAN || it.kind == HomeApps.SLEEP_TIMER || it.kind == HomeApps.SERVER_PICK || it.kind == HomeApps.NET_CHECK) {
+        if (it.kind == HomeApps.REBOOT || it.kind == HomeApps.SLEEP || it.kind == HomeApps.CLEAN || it.kind == HomeApps.SLEEP_TIMER || it.kind == HomeApps.SERVER_PICK || it.kind == HomeApps.NET_CHECK || it.kind == HomeApps.KILL_ALL) {
             quickAction(it);
             return;
         }
@@ -2323,8 +2325,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             activity.startActivity(new android.content.Intent(activity, DarkActivity.class));
             return;
         }
-        final String command = it.kind == HomeApps.REBOOT ? "reboot" : "pm trim-caches 8G";
-        final String done = it.kind == HomeApps.CLEAN ? (Ui.ru ? "Кэш очищен" : Ui.tr("Cache limpo", "Cache cleared")) : null;
+        // Close all: every app the user installed except Free My TV and the VPN apps (stopping those would drop the VPN), then the
+        // system's cached background processes.
+        final String command = it.kind == HomeApps.REBOOT ? "reboot" : it.kind == HomeApps.KILL_ALL
+                ? "for p in $(pm list packages -3 | cut -d: -f2); do case $p in io.freemytv|com.v2raytun.android|com.github.shadowsocks.tv) ;; *) am force-stop $p;; esac; done; am kill-all"
+                : "pm trim-caches 8G";
+        final String done = it.kind == HomeApps.CLEAN ? (Ui.ru ? "Кэш очищен" : Ui.tr("Cache limpo", "Cache cleared"))
+                : it.kind == HomeApps.KILL_ALL ? (Ui.ru ? "Все приложения закрыты" : Ui.tr("Apps fechados", "All apps closed")) : null;
         final String failed = Ui.ru ? "Не удалось: включите отладку по USB" : Ui.tr("Falhou: ative a depuração USB", "Failed: turn on USB debugging");
         new Thread(() -> {
             try (Adb adb = Adb.connect(getContext(), 5000, null)) {
@@ -2848,9 +2855,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** The probe only means something when Free My TV's own traffic goes through the VPN (V2RayTun's app list); it checks that first. */
     private static final boolean PROBE_ON = true;
     private int probeState;
-    private int probeFails;
-    private long probeAt, blinkAt;
-    private boolean probing;
+    private long pingVersion = -1;
+    private int probeMs = -1;   // how long the probe takes: shown next to "VPN"
+    private long blinkAt;
     private int wifiBars = -1;           // 0 to 4 bars; -1 = not on Wi-Fi
     private volatile float tempC = Float.NaN;
     private long vpnCheckedAt, tempCheckedAt;
@@ -2872,47 +2879,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         } catch (RuntimeException e) {
             return -1;
         }
-    }
-
-    /** One tiny request (no body) to YouTube, sent over the VPN network itself, so it tells whether the VPN really carries traffic. */
-    private void probeVpn() {
-        if (probing) return;
-        probing = true;
-        new Thread(() -> {
-            boolean ok = false;
-            try {
-                android.net.ConnectivityManager cm0 = (android.net.ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
-                android.net.NetworkCapabilities mine = cm0.getNetworkCapabilities(cm0.getActiveNetwork());
-                if (mine == null || !mine.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) {   // outside the VPN: nothing to test
-                    handler.post(() -> {
-                        probing = false;
-                        probeFails = 0;
-                        if (probeState != 0) {
-                            probeState = 0;
-                            statusDirty = true;
-                            status.invalidate();
-                        }
-                    });
-                    return;
-                }
-                StringBuilder why = new StringBuilder();
-                int code = VpnGuard.probe(getContext(), "https://www.youtube.com/generate_204", 6000, false, false, why);
-                ok = code > 0 && code < 500;   // any answer: the path works
-                if (!ok) AppLog.w("vpn probe: " + why);
-            } catch (Exception ignored) {}
-            final boolean result = ok;
-            handler.post(() -> {
-                probing = false;
-                probeFails = result ? 0 : probeFails + 1;
-                int state = result ? 1 : probeFails >= 2 ? 2 : probeState;   // red only after two misses in a row
-                if (state != probeState) {
-                    AppLog.w("vpn probe: " + (state == 1 ? "YouTube answers through the VPN" : "no answer through the VPN"));
-                    probeState = state;
-                    statusDirty = true;
-                    status.invalidate();
-                }
-            });
-        }, "vpn-probe").start();
     }
 
     /** The hottest thermal zone, read from sysfs, or through the TV's own ADB when apps can't read it. */
@@ -3001,8 +2967,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         if (!vpnOn && !v2Installed) return;   // no VPN on this TV: nothing to show
         String label = vpnOn ? "VPN" : (Ui.ru ? "VPN выкл" : "VPN off");
-        float w = lStatus.measureText(label);
+        String ping = vpnOn && probeState == 1 && probeMs > 0 ? " " + probeMs + (Ui.ru ? " мс" : " ms") : "";
+        float pw = ping.isEmpty() ? 0 : lStatus.measureText(ping);
+        float w = lStatus.measureText(label) + pw;
         c.drawText(label, x - w, cy + Ui.halfCap(lStatus), lStatus);
+        if (!ping.isEmpty()) {   // orange above 400 ms, red above 800 (video does not need more)
+            int keep = lStatus.getColor();
+            if (probeMs > 800) lStatus.setColor(0xFFFF3B30);
+            else if (probeMs > 400) lStatus.setColor(0xFFFF9500);
+            c.drawText(ping, x - pw, cy + Ui.halfCap(lStatus), lStatus);
+            lStatus.setColor(keep);
+        }
         int dot = !vpnOn ? 0xFF9A9AA0 : probeState == 2 ? 0xFFFF3B30 : 0xFF34C759;   // gray off, green works, red blinks, amber still checking
         if (vpnOn && probeState == 2) {
             float pulse = 0.5f + 0.5f * (float) Math.sin(SystemClock.uptimeMillis() / 1000.0 * 2 * Math.PI * 3.5);
