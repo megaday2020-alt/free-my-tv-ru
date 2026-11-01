@@ -60,6 +60,7 @@ final class NewsFeed {
         float rating;
         String title, tags;
         Set<String> words;
+        float boost;   // by the words of the title: war, accidents, money, the state are up; show business and the like are down
     }
 
     // MARK: - What the screensaver shows
@@ -77,20 +78,23 @@ final class NewsFeed {
         for (Item it : all) {
             boolean ok = threshold == 0 || it.rating >= threshold;
             if (!ok && threshold > 0 && it.rating == UNRATED) {   // unrated: when there is nothing to rate by, or when an important post says the same
-                ok = !rated;
+                ok = !rated || it.boost >= 0.5f;
                 if (!ok) for (Item o : all) if (o != it && o.src < FIRST_RSS && o.rating >= threshold && similar(it, o)) { ok = true; break; }
             }
             if (ok) keep.add(it);
         }
-        if (threshold > 0) {   // every channel gets its best posts even on a quiet day, and none fills the whole card
-            final int least = Prefs.newsImportant() == 1 ? 4 : Prefs.newsImportant() == 2 ? 3 : 2;
+        if (threshold > 0 && keep.isEmpty()) {   // a very quiet day: the three best, so that the card is not empty
+            List<Item> rest = new ArrayList<>();
+            for (Item it : all) if (it.rating >= 0 && it.rating < CURATED) rest.add(it);
+            Collections.sort(rest, (x, y) -> Float.compare(y.rating, x.rating));
+            for (int i = 0; i < rest.size() && i < 3; i++) keep.add(rest.get(i));
+        }
+        if (threshold > 0) {   // no single channel fills the card
             for (int src = 0; src < FIRST_RSS; src++) {
                 List<Item> mine = new ArrayList<>();
-                for (Item it : all) if (it.src == src) mine.add(it);
+                for (Item it : keep) if (it.src == src) mine.add(it);
                 Collections.sort(mine, (x, y) -> Float.compare(y.rating, x.rating));
-                for (int i = 0; i < mine.size() && i < least; i++) if (!keep.contains(mine.get(i))) keep.add(mine.get(i));
-                int seen = 0;
-                for (Item it : mine) if (keep.contains(it) && ++seen > 6) keep.remove(it);
+                for (int i = 6; i < mine.size(); i++) keep.remove(mine.get(i));
             }
         }
         // Best-rated first, so that of two near copies the more important one stays; then newest first.
@@ -124,6 +128,20 @@ final class NewsFeed {
         return title.substring(0, cut > 32 ? cut : max - 2).replaceAll("[\\s,;:\\-—]+$", "") + "…";
     }
 
+    private static final Pattern UP = Pattern.compile("(?i)срочн|молни|взрыв|ракет|удар|атак|погиб|теракт|обстрел|эвакуац|пожар|авари|крушен|землетряс|наводнен|президент|путин|трамп|зеленск|правительств|госдум|санкци|переговор|перемири|мобилиз|ключев|инфляц|нефт|газ |выбор|закон|запрет|арест|задерж|обвинил|отставк|армия|войн|нато|беспилотник|дрон|ядерн|курс доллар|курс евро|цб ");
+    private static final Pattern DOWN = Pattern.compile("(?i)звезд|шоу|певиц|певец|актер|актёр|актрис|блогер|развод|свадьб|гороскоп|собак|котик|рецепт|мем |сериал|фильм|клип|инстаграм|футбол|хоккей|матч|гол |чемпионат|скидк|акция|распродаж");
+
+    /** What the words of a title say about its weight: up to +0.7 for serious subjects, -0.5 for light ones. */
+    static float boost(String title) {
+        float b = 0;
+        Matcher up = UP.matcher(title);
+        int n = 0;
+        while (up.find() && n < 2) n++;
+        b += 0.35f * n;
+        if (DOWN.matcher(title).find()) b -= 0.5f;
+        return b;
+    }
+
     private static boolean similar(Item a, Item b) {
         if (a.words.isEmpty() || b.words.isEmpty()) return false;
         int common = 0;
@@ -152,6 +170,8 @@ final class NewsFeed {
                 it.title = f[2];
                 it.tags = TAGS[src];
                 it.words = words(f[2]);
+                it.boost = boost(f[2]);
+                if (it.rating >= 0 && it.rating < CURATED) it.rating += it.boost;
                 if (now - it.at <= MAX_AGE_MS) out.add(it);
             } catch (NumberFormatException ignored) {}
         }

@@ -166,9 +166,12 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             LinearLayout small = new LinearLayout(c);
             small.setOrientation(LinearLayout.HORIZONTAL);
             if (Prefs.saverRates()) small.addView(smallCard(c, "bitcoin", GREEN, Ui.ru ? "Курс ЦБ" : "Exchange rates", true), smallParams(Prefs.saverLink()));
-            if (Prefs.saverLink()) small.addView(smallCard(c, "wifi", VIOLET, Ui.ru ? "Связь" : "Connection", false), smallParams(false));
+            if (Prefs.saverLink()) small.addView(smallCard(c, "wifi", VIOLET, Ui.ru ? "Связь" : "Connection", false),
+                    Prefs.saverRates() ? smallParams(false) : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             if (Prefs.saverNews()) {   // under the weather; without the news they go to the right column
-                left.addView(small, cardParams(leftAny ? 24 : 0));
+                LinearLayout.LayoutParams sp = cardParams(leftAny ? 24 : 0);
+                if (!Prefs.saverRates()) sp.width = ViewGroup.LayoutParams.WRAP_CONTENT;   // the connection card alone: as wide as its text
+                left.addView(small, sp);
                 leftAny = true;
             } else {
                 right.addView(small, stretch(0));
