@@ -91,11 +91,12 @@ final class NewsFeed {
             Collections.sort(rest, (x, y) -> Float.compare(y.rating, x.rating));
             for (int i = 0; i < rest.size() && i < 3; i++) keep.add(rest.get(i));
         }
-        if (threshold > 0) {   // no single channel fills the card
-            for (int src = 0; src < FIRST_RSS; src++) {
+        {   // no single source fills the card: each gives its six best (newest when nothing is rated), the busy ones do not push out the quiet ones
+            final boolean byRating = threshold > 0;
+            for (int src = 0; src < NAMES.length; src++) {
                 List<Item> mine = new ArrayList<>();
                 for (Item it : keep) if (it.src == src) mine.add(it);
-                Collections.sort(mine, (x, y) -> Float.compare(y.rating, x.rating));
+                Collections.sort(mine, (x, y) -> byRating ? Float.compare(y.rating, x.rating) : Long.compare(y.at, x.at));
                 for (int i = 6; i < mine.size(); i++) keep.remove(mine.get(i));
             }
         }
