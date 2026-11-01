@@ -103,9 +103,20 @@ final class NewsFeed {
         List<String> out = new ArrayList<>();
         for (Item it : unique) {
             if (out.size() >= SHOWN) break;
-            out.add(hm.format(new java.util.Date(it.at)) + "\t" + it.tags + "\t" + it.title);
+            out.add(hm.format(new java.util.Date(it.at)) + "\t" + it.tags + "\t" + fit(it.title));
         }
         return out;
+    }
+
+    /** Short enough for two lines on the card: cut at a comma or a dash when there is one, else at a word. */
+    static String fit(String title) {
+        final int max = 74;
+        if (title.length() <= max) return title;
+        int cut = -1;
+        for (String sep : new String[] {", ", " — ", " – ", "; ", ": "}) cut = Math.max(cut, title.lastIndexOf(sep, max - 1));
+        if (cut >= 32) return title.substring(0, cut);
+        cut = title.lastIndexOf(' ', max - 2);
+        return title.substring(0, cut > 32 ? cut : max - 2).replaceAll("[\\s,;:\\-—]+$", "") + "…";
     }
 
     private static boolean similar(Item a, Item b) {
