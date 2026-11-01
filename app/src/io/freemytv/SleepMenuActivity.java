@@ -47,7 +47,7 @@ public class SleepMenuActivity extends Activity {
         panel.addView(title);
         String state = active == 0 ? (Ui.ru ? "Сейчас выключен" : Ui.tr("Desligado", "Off now"))
                 : (Ui.ru ? "Сработает через " + active + " мин" : Ui.tr("Em " + active + " min", "In " + active + " min"));
-        TextView sub = text(state + (Ui.ru ? ". Ночные часы и пауза видео." : ". Night clock, and the video pauses."), 15, 0xFF9A9AA0, false);
+        TextView sub = text(state + (Ui.ru ? ". Заставка и пауза видео." : ". Night clock, and the video pauses."), 15, 0xFF9A9AA0, false);
         sub.setPadding(0, px(4), 0, px(14));
         panel.addView(sub);
 
@@ -67,7 +67,7 @@ public class SleepMenuActivity extends Activity {
     private void choose(int minutes) {
         SleepTimer.set(this, minutes);
         Toast.makeText(this, minutes == 0 ? (Ui.ru ? "Таймер сна выключен" : Ui.tr("Temporizador desligado", "Sleep timer off"))
-                : (Ui.ru ? "Ночные часы через " + minutes + " мин" : Ui.tr("Relógio noturno em " + minutes + " min", "Night clock in " + minutes + " min")),
+                : (Ui.ru ? "Заставка через " + minutes + " мин" : Ui.tr("Relógio noturno em " + minutes + " min", "Night clock in " + minutes + " min")),
                 Toast.LENGTH_SHORT).show();
         finish();
     }

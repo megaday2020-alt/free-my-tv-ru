@@ -666,7 +666,7 @@ final class HomeData {
      * Weather and the rest go over the real network (Wi-Fi or cable), never through the VPN, even though Free My TV is
      * among the apps the VPN carries (that is what lets the VPN indicator test the real path).
      */
-    private static HttpURLConnection open(String url, int attempt) throws IOException {
+    static HttpURLConnection open(String url, int attempt) throws IOException {
         URL u = new URL(url);
         try {
             android.net.ConnectivityManager cm = (android.net.ConnectivityManager) appCtx.getSystemService(Context.CONNECTIVITY_SERVICE);

@@ -229,10 +229,10 @@ final class HomeApps {
         items.add(shortcut(ALL_APPS, "all", Ui.tr("Todos os Apps", "All Apps"), "apps"));
         items.add(shortcut(SETTINGS, "settings", Ui.tr("Ajustes do Início", "Home Settings"), "settings"));
         items.add(shortcut(ANDROID_SETTINGS, "tv-settings", Ui.tr("Ajustes da TV", "TV Settings"), "tv_settings"));
-        items.add(shortcut(SLEEP, "sleep", Ui.ru ? "Ночные часы" : Ui.tr("Relógio noturno", "Night clock"), "bedtime"));
+        items.add(shortcut(SLEEP, "sleep", Ui.ru ? "Заставка" : Ui.tr("Relógio noturno", "Night clock"), "bedtime"));
         items.add(shortcut(SLEEP_TIMER, "sleeptimer", Ui.ru ? "Таймер сна" : Ui.tr("Temporizador", "Sleep timer"), "bell"));
         items.add(shortcut(SERVER_PICK, "serverpick", Ui.ru ? "Сервер VPN" : Ui.tr("Servidor VPN", "VPN server"), "check"));
-        items.add(shortcut(NET_CHECK, "netcheck", Ui.ru ? "Проверить сеть" : Ui.tr("Testar a rede", "Check network"), "wifi"));
+        items.add(shortcut(NET_CHECK, "netcheck", Ui.ru ? "Соединение" : Ui.tr("Testar a rede", "Check network"), "wifi"));
         items.add(shortcut(CLEAN, "clean", Ui.ru ? "Очистить кэш" : Ui.tr("Limpar cache", "Clear cache"), "sparkles"));
         items.add(shortcut(KILL_ALL, "killall", Ui.ru ? "Закрыть все" : Ui.tr("Fechar tudo", "Close all"), "close"));
         items.add(shortcut(REBOOT, "reboot", Ui.ru ? "Перезагрузить" : Ui.tr("Reiniciar", "Restart"), "sync"));

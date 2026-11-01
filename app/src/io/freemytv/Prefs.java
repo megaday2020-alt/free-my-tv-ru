@@ -164,6 +164,22 @@ final class Prefs {
     static boolean sounds() { return sp().getBoolean("sounds", false); }
     static void setSounds(boolean on) { put("sounds", on); }
 
+    /** What the screensaver (the dim "night clock") shows, each one on its own switch. */
+    static boolean saverClock() { return sp().getBoolean("saverClock", true); }
+    static void setSaverClock(boolean on) { put("saverClock", on); }
+    static boolean saverDate() { return sp().getBoolean("saverDate", true); }
+    static void setSaverDate(boolean on) { put("saverDate", on); }
+    static boolean saverWeather() { return sp().getBoolean("saverWeather", true); }
+    static void setSaverWeather(boolean on) { put("saverWeather", on); }
+    static boolean saverNews() { return sp().getBoolean("saverNews", true); }
+    static void setSaverNews(boolean on) { put("saverNews", on); }
+    /** Index into NewsFeed.NAMES. */
+    static int newsSource() { return Math.max(0, Math.min(sp().getInt("newsSource", 0), NewsFeed.NAMES.length - 1)); }
+    static void setNewsSource(int i) { sp().edit().putInt("newsSource", i).apply(); version++; }
+    /** 0 dim (the default: a dark room), 1 medium, 2 bright. */
+    static int saverBrightness() { return Math.max(0, Math.min(sp().getInt("saverBright", 0), 2)); }
+    static void setSaverBrightness(int i) { sp().edit().putInt("saverBright", i).apply(); version++; }
+
     static boolean quotes() { return sp().getBoolean("quotes", Config.SHOW_CRYPTO); }
     static void setQuotes(boolean on) { put("quotes", on); }
 
