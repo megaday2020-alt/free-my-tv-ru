@@ -416,9 +416,14 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             if (r == null) {
                 routeBody.setText("—");
             } else {
-                String t = Route.time(r[0]) + "\n" + Route.km(r[1]);
+                int light = Route.light(r[0]);   // the traffic light: green, yellow, red by how long the road takes
+                int color = light == 0 ? GREEN : light == 1 ? 0xFFFFD84D : 0xFFFF5A52;
+                String t = "\u25CF  " + Route.time(r[0]) + "\n" + Route.km(r[1]);
                 if (Route.stale(r[2])) t += (Ui.ru ? "  ·  данные на " : "  ·  as of ") + new SimpleDateFormat("HH:mm", locale).format(new Date(r[2]));
-                routeBody.setText(t);
+                SpannableString sp = new SpannableString(t);
+                sp.setSpan(new ForegroundColorSpan(color), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sp.setSpan(new android.text.style.RelativeSizeSpan(1.25f), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                routeBody.setText(sp);
             }
         }
 

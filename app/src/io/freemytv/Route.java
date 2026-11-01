@@ -53,6 +53,11 @@ final class Route {
         return new long[] {Math.round(bestSec), Math.round(bestM)};
     }
 
+    /** The traffic light of the trip: 0 green (up to 2.5 h), 1 yellow (up to 3 h), 2 red (longer). */
+    static int light(long seconds) {
+        return seconds <= 150 * 60 ? 0 : seconds <= 180 * 60 ? 1 : 2;
+    }
+
     /** "1 ч 12 мин", "45 мин". */
     static String time(long seconds) {
         long min = Math.max(1, Math.round(seconds / 60.0));
