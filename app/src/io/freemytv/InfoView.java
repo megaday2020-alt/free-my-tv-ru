@@ -449,27 +449,58 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         }
     }
 
-    /** Shows the next group of headlines (each with the time it came out), with a fade. */
+    private final List<String> shown = new ArrayList<>();       // the lines on the card now, newest first
+    private final java.util.Set<String> seen = new java.util.HashSet<>();   // titles that were in the feed already: never shown again once they leave
+
+    /**
+     * The news as a feed: the card keeps its headlines still, and a story that is new (not seen before, and not the same story
+     * as one already on the card) comes in at the top while the oldest one goes. Nothing comes back after it has left.
+     */
     private void flipHeadlines() {
         if (headlineBox == null) return;
         final List<String> list = NewsFeed.saved(getContext());
         if (list.isEmpty()) {
+            if (!shown.isEmpty()) return;   // the old ones stay while the network is away
             headSource.setText("");
             for (TextView t : headlineRows) t.setText("");
             headlineRows.get(0).setText(Ui.ru ? "Новости загружаются…" : "Loading the news…");
             return;
         }
-        final int groups = Math.max(1, (list.size() + HEADLINES - 1) / HEADLINES);
-        final int from = (page++ % groups) * HEADLINES;
+        java.util.Set<String> current = new java.util.HashSet<>();
+        List<String> fresh = new ArrayList<>();
+        for (String line : list) {
+            String[] f = line.split("\t", 3);
+            if (f.length < 3) continue;
+            current.add(f[2]);
+            if (seen.add(f[2])) fresh.add(line);
+        }
+        if (seen.size() > 400) { seen.clear(); seen.addAll(current); }
+        List<String> next = new ArrayList<>();
+        for (String line : fresh) {
+            String title = line.split("\t", 3)[2];
+            boolean twin = false;
+            for (String o : next) if (NewsFeed.sameStory(title, o.split("\t", 3)[2])) { twin = true; break; }
+            for (String o : shown) if (!twin && NewsFeed.sameStory(title, o.split("\t", 3)[2])) { twin = true; break; }
+            if (!twin) next.add(line);
+        }
+        for (String line : shown) {   // what was on the card stays while it is still in the feed
+            String[] f = line.split("\t", 3);
+            if (f.length == 3 && current.contains(f[2])) next.add(line);
+        }
+        while (next.size() > HEADLINES) next.remove(next.size() - 1);
+        if (next.equals(shown)) return;
+        shown.clear();
+        shown.addAll(next);
+        final List<String> lines = new ArrayList<>(next);
         headlineBox.animate().alpha(0f).setDuration(350).withEndAction(() -> {
             headSource.setText(Prefs.newsImportant() > 0 ? (Ui.ru ? "только важное" : "important only") : "");
             for (int i = 0; i < HEADLINES; i++) {
                 TextView t = headlineRows.get(i);
-                if (from + i >= list.size()) {
+                if (i >= lines.size()) {
                     t.setText("");
                     continue;
                 }
-                String line = list.get(from + i);
+                String line = lines.get(i);
                 String[] f = line.split("\t", 3);
                 if (f.length < 3) {
                     t.setText(line);

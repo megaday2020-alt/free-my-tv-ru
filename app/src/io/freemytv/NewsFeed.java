@@ -115,7 +115,18 @@ final class NewsFeed {
         AppLog.w("news: shown " + unique.size() + " of " + all.size() + " (kept " + keep.size() + ", threshold " + threshold + ")");
         java.text.SimpleDateFormat hm = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
         List<String> out = new ArrayList<>();
-        for (Item it : unique) {
+        List<Item> spread = new ArrayList<>();   // the sources mix: no one of them three times in a row
+        List<Item> rest = new ArrayList<>(unique);
+        while (!rest.isEmpty()) {
+            Item pick = rest.get(0);
+            int n = spread.size();
+            if (n >= 2 && spread.get(n - 1).src == pick.src && spread.get(n - 2).src == pick.src) {
+                for (Item it : rest) if (it.src != pick.src) { pick = it; break; }
+            }
+            spread.add(pick);
+            rest.remove(pick);
+        }
+        for (Item it : spread) {
             if (out.size() >= SHOWN) break;
             out.add(hm.format(new java.util.Date(it.at)) + "\t" + it.tags + "\t" + it.title);
         }
@@ -152,6 +163,14 @@ final class NewsFeed {
         int common = 0;
         for (String w : a.words) if (b.words.contains(w)) common++;
         return common >= 3 && common >= 0.5f * Math.min(a.words.size(), b.words.size());
+    }
+
+    /** Two headlines about the same thing (the screensaver does not show the second one). */
+    static boolean sameStory(String a, String b) {
+        Item x = new Item(), y = new Item();
+        x.words = words(a);
+        y.words = words(b);
+        return similar(x, y);
     }
 
     private static Set<String> words(String title) {
