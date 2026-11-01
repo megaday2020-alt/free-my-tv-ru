@@ -64,7 +64,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     private final List<ObjectAnimator> motion = new ArrayList<>();
     private LinearLayout row;
     private TextView ecoClock;
-    private TextView dateText, tempText, condText, detailText, todayText, nowcastText, headSource, ratesBody, linkBody;
+    private TextView dateText, tempText, condText, detailText, todayText, nowcastText, headSource, routeBody, linkBody;
     private SymbolView nowIcon;
     private final List<TextView> headlineRows = new ArrayList<>();
     private LinearLayout headlineBox;
@@ -77,7 +77,6 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             long ecoAfter = Prefs.saverEcoMinutes() * 60_000L;
             if (!eco && ecoAfter > 0 && SystemClock.uptimeMillis() - startedAt >= ecoAfter) {
                 enterEco();
-                return;
             }
             refreshData();
             flipHeadlines();
@@ -87,7 +86,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
 
     private final Runnable fast = new Runnable() {   // the date and the connection card change often
         @Override public void run() {
-            if (!running || eco) return;
+            if (!running) return;
             fill();
             handler.postDelayed(this, 5_000);
         }
@@ -162,15 +161,16 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             right.addView(newsCard(c), stretch(0));
             rightAny = true;
         }
-        if (Prefs.saverRates() || Prefs.saverLink()) {
+        boolean route = Prefs.saverRoute() && Route.configured();
+        if (route || Prefs.saverLink()) {
             LinearLayout small = new LinearLayout(c);
             small.setOrientation(LinearLayout.HORIZONTAL);
-            if (Prefs.saverRates()) small.addView(smallCard(c, "bitcoin", GREEN, Ui.ru ? "Курс ЦБ" : "Exchange rates", true), smallParams(Prefs.saverLink()));
+            if (route) small.addView(smallCard(c, "home", GREEN, Prefs.routeName().isEmpty() ? (Ui.ru ? "Дорога" : "Road") : Prefs.routeName(), true), smallParams(Prefs.saverLink()));
             if (Prefs.saverLink()) small.addView(smallCard(c, "wifi", VIOLET, Ui.ru ? "Связь" : "Connection", false),
-                    Prefs.saverRates() ? smallParams(false) : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                    route ? smallParams(false) : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             if (Prefs.saverNews()) {   // under the weather; without the news they go to the right column
                 LinearLayout.LayoutParams sp = cardParams(leftAny ? 24 : 0);
-                if (!Prefs.saverRates()) sp.width = ViewGroup.LayoutParams.WRAP_CONTENT;   // the connection card alone: as wide as its text
+                if (!route) sp.width = ViewGroup.LayoutParams.WRAP_CONTENT;   // the connection card alone: as wide as its text
                 left.addView(small, sp);
                 leftAny = true;
             } else {
@@ -357,7 +357,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         return card;
     }
 
-    private LinearLayout smallCard(Context c, String symbol, int accent, String title, boolean rates) {
+    private LinearLayout smallCard(Context c, String symbol, int accent, String title, boolean road) {
         LinearLayout card = card(c);
         card.setPadding(Math.round(28 * u), Math.round(24 * u), Math.round(24 * u), Math.round(26 * u));
         card.addView(header(c, symbol, accent, title, null));
@@ -365,7 +365,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         body.setLineSpacing(0, 1.2f);
         body.setPadding(0, Math.round(14 * u), 0, 0);
         card.addView(body);
-        if (rates) ratesBody = body;
+        if (road) routeBody = body;
         else linkBody = body;
         return card;
     }
@@ -411,18 +411,14 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             }
         }
 
-        if (ratesBody != null) {
-            List<Rates.Rate> rates = Rates.saved(getContext());
-            if (rates.isEmpty()) {
-                ratesBody.setText("—");
+        if (routeBody != null) {
+            long[] r = Route.saved(getContext());
+            if (r == null) {
+                routeBody.setText("—");
             } else {
-                StringBuilder sb = new StringBuilder();
-                for (Rates.Rate r : rates) {
-                    sb.append(sb.length() > 0 ? "\n" : "").append(r.code).append("   ").append(String.format(locale, "%.2f", r.value)).append(" ₽");
-                    double diff = r.value - r.previous;
-                    if (Math.abs(diff) >= 0.005) sb.append(diff > 0 ? "  ▲" : "  ▼");
-                }
-                ratesBody.setText(sb.toString());
+                String t = Route.time(r[0]) + "\n" + Route.km(r[1]);
+                if (Route.stale(r[2])) t += (Ui.ru ? "  ·  данные на " : "  ·  as of ") + new SimpleDateFormat("HH:mm", locale).format(new Date(r[2]));
+                routeBody.setText(t);
             }
         }
 
@@ -493,7 +489,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     private void refreshData() {
         data.refreshIfStale();
         NewsFeed.refresh(getContext(), () -> handler.post(this::flipHeadlines));
-        Rates.refresh(getContext(), () -> handler.post(this::fill));
+        Route.refresh(getContext(), () -> handler.post(this::fill));
     }
 
     /** The glow follows the weather and the time of day; the scrim darkens everything as set in Settings (and by night). */
@@ -526,7 +522,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
         }
         glowA.setColor(a);
         glowB.setColor(b);
-        scrim.setAlpha(eco ? 0f : dimming());
+        scrim.setAlpha(dimming());
         if (running) Backlight.set(getContext(), backlight());
     }
 
@@ -534,7 +530,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     private int backlight() {
         if (eco) return 8;
         int level = Prefs.saverBrightness();
-        return level == 3 ? 0 : level == 1 ? 25 : level == 2 ? 50 : data.weather.isDay ? 55 : 30;
+        return level == 3 ? 0 : level == 1 ? 12 : level == 2 ? 30 : data.weather.isDay ? 30 : 15;   // low from the start
     }
 
     /** 0 = leave as it is, up to 0.6 = much darker. Brightness in Settings: Auto (dark at night), Dim, Medium, Bright. */
@@ -553,22 +549,12 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
 
     // MARK: - Economy
 
-    /** After a while: only a dim clock on black, nothing moving, and the panel turned down. */
+    /** After a while: the same board, nothing moving, and the panel turned down further. */
     private void enterEco() {
         eco = true;
         for (ObjectAnimator a : motion) a.cancel();
         motion.clear();
-        row.animate().alpha(0f).setDuration(1500).withEndAction(() -> row.setVisibility(View.GONE)).start();
-        glowA.animate().alpha(0f).setDuration(1500).start();
-        glowB.animate().alpha(0f).setDuration(1500).start();
-        scrim.setAlpha(0f);
         Backlight.set(getContext(), backlight());
-        ecoClock.setAlpha(0f);
-        ecoClock.setVisibility(View.VISIBLE);
-        ecoClock.animate().alpha(1f).setDuration(1500).start();
-        handler.removeCallbacks(tick);
-        handler.removeCallbacks(fast);
-        handler.postDelayed(moveEco, 60_000);
         if (onEco != null) onEco.run();
         AppLog.w("screensaver: economy mode");
     }
@@ -626,7 +612,6 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
     }
 
     @Override public void onData() {
-        if (eco) return;
         paint();
         fill();
     }

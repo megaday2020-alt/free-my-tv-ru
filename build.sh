@@ -68,6 +68,9 @@ final class Config {
     static final boolean SHOW_CRYPTO = $CRYPTO;
     static final boolean AUTO_LOCATION = $AUTOLOC;
     static final String WEATHER_YANDEX = "$(prop weather_yandex auto)";
+    static final String ROUTE_FROM = "$(prop route_from '')";
+    static final String ROUTE_TO = "$(prop route_to '')";
+    static final String ROUTE_NAME = "$(prop route_name '')";
 }
 EOF
 

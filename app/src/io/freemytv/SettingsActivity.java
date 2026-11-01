@@ -642,12 +642,12 @@ public class SettingsActivity extends Activity {
         // Home Settings are grouped: the list of groups (HOME_GROUPS), then the rows of one group (HOME_SETTINGS).
         private static final int LANG_ROW = 0, TEMP_ROW = 1, THEME_ROW = 2, WEATHER_ROW = 3, CITY_ROW = 4, ANIMATION_ROW = 6, SOUNDS_ROW = 7,
                 MAINTENANCE_ROW = 8, VPN_GUARD_ROW = 9, SERVER_ROW = 10, REPORT_ROW = 11, UPDATE_ROW = 12, WARM_ROW = 13, LOG_ROW = 14,
-                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_IMPORTANT_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_RATES_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23, SAVER_PAUSE_ROW = 24,
+                SAVER_CLOCK_ROW = 15, SAVER_DATE_ROW = 16, SAVER_WEATHER_ROW = 17, SAVER_NEWS_ROW = 18, NEWS_IMPORTANT_ROW = 19, SAVER_BRIGHT_ROW = 20, SAVER_ROUTE_ROW = 21, SAVER_LINK_ROW = 22, SAVER_ECO_ROW = 23, SAVER_PAUSE_ROW = 24,
                 NEWS_SRC_ROW = 30;   // 30..34: one switch per news source (NewsFeed.NAMES)
         private static final int[][] GROUP_ROWS = {
                 {LANG_ROW, TEMP_ROW, THEME_ROW, ANIMATION_ROW, SOUNDS_ROW, WARM_ROW},   // look
                 {WEATHER_ROW, CITY_ROW},                                                // weather
-                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_RATES_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW, SAVER_PAUSE_ROW},   // screensaver
+                {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_ROUTE_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW, SAVER_PAUSE_ROW},   // screensaver
                 {SAVER_NEWS_ROW, NEWS_IMPORTANT_ROW, NEWS_SRC_ROW, NEWS_SRC_ROW + 1, NEWS_SRC_ROW + 2, NEWS_SRC_ROW + 3, NEWS_SRC_ROW + 4},   // screensaver news
                 {VPN_GUARD_ROW, SERVER_ROW, MAINTENANCE_ROW},                           // VPN and upkeep
                 {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
@@ -658,7 +658,7 @@ public class SettingsActivity extends Activity {
         private static boolean isSwitch(int id) {
             return id == WEATHER_ROW || id == ANIMATION_ROW || id == SOUNDS_ROW || id == MAINTENANCE_ROW || id == VPN_GUARD_ROW
                     || id == SERVER_ROW || id == WARM_ROW || id == SAVER_CLOCK_ROW || id == SAVER_DATE_ROW || id == SAVER_WEATHER_ROW
-                    || id == SAVER_NEWS_ROW || (id >= NEWS_SRC_ROW && id < NEWS_SRC_ROW + NewsFeed.NAMES.length) || id == SAVER_RATES_ROW || id == SAVER_LINK_ROW;
+                    || id == SAVER_NEWS_ROW || (id >= NEWS_SRC_ROW && id < NEWS_SRC_ROW + NewsFeed.NAMES.length) || id == SAVER_ROUTE_ROW || id == SAVER_LINK_ROW;
         }
 
         private int[] rows() {
@@ -678,7 +678,7 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] groupValues() {
-            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, курсы, яркость", "каналы, только важное", "страж, серверы", "обновление, журнал"}
+            return Ui.ru ? new String[] {"язык, тема, анимация", "виджет, город", "часы, погода, дорога, яркость", "каналы, только важное", "страж, серверы", "обновление, журнал"}
                     : new String[] {"language, theme, animation", "widget, city", "clock, weather, rates", "channels, important only", "guard, servers", "update, log"};
         }
 
@@ -711,7 +711,7 @@ public class SettingsActivity extends Activity {
                 case SAVER_NEWS_ROW: return Ui.ru ? "Новости" : "News";
                 case SAVER_ECO_ROW: return Ui.ru ? "Экономия экрана" : "Screen economy";
                 case SAVER_PAUSE_ROW: return Ui.ru ? "Заставка при паузе" : "Screensaver when idle";
-                case SAVER_RATES_ROW: return Ui.ru ? "Курсы валют" : "Exchange rates";
+                case SAVER_ROUTE_ROW: return Ui.ru ? "Дорога до дома" : "Road home";
                 case SAVER_LINK_ROW: return Ui.ru ? "Состояние связи" : "Connection";
                 case NEWS_IMPORTANT_ROW: return Ui.ru ? "Только важное" : "Important only";
                 case NEWS_SRC_ROW: case NEWS_SRC_ROW + 1: case NEWS_SRC_ROW + 2: case NEWS_SRC_ROW + 3: case NEWS_SRC_ROW + 4:
@@ -757,7 +757,7 @@ public class SettingsActivity extends Activity {
                     int m = Prefs.saverEcoMinutes();
                     return m == 0 ? (Ui.ru ? "Никогда" : "Never") : (Ui.ru ? "Через " + m + " мин" : "After " + m + " min");
                 }
-                case SAVER_RATES_ROW: return onOff(Prefs.saverRates());
+                case SAVER_ROUTE_ROW: return onOff(Prefs.saverRoute());
                 case SAVER_LINK_ROW: return onOff(Prefs.saverLink());
                 case NEWS_IMPORTANT_ROW: {
                     int level = Prefs.newsImportant();
@@ -883,7 +883,7 @@ public class SettingsActivity extends Activity {
                     Prefs.setSaverEcoMinutes(choices[(at + dir + choices.length) % choices.length]);
                     return;
                 }
-                case SAVER_RATES_ROW: Prefs.setSaverRates(!Prefs.saverRates()); return;
+                case SAVER_ROUTE_ROW: Prefs.setSaverRoute(!Prefs.saverRoute()); return;
                 case SAVER_LINK_ROW: Prefs.setSaverLink(!Prefs.saverLink()); return;
                 case NEWS_IMPORTANT_ROW: Prefs.setNewsImportant((Prefs.newsImportant() + dir + 4) % 4); return;
                 case NEWS_SRC_ROW: case NEWS_SRC_ROW + 1: case NEWS_SRC_ROW + 2: case NEWS_SRC_ROW + 3: case NEWS_SRC_ROW + 4: {

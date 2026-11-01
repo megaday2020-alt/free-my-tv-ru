@@ -39,6 +39,7 @@ final class Prefs {
     static void init(Context c) {
         app = c.getApplicationContext();
         pinLocation();
+        pinRoute();
         migrateKeys();   // before anything reads the button choices
         Ui.applyLanguage();   // the language picked on the TV, now that it can be read
     }
@@ -103,6 +104,20 @@ final class Prefs {
         p.edit().putString("city", Config.CITY).putString("latitude", Config.LATITUDE).putString("longitude", Config.LONGITUDE).apply();
         AppLog.w("location saved on the TV: " + Config.CITY);
     }
+
+    /** Same for the "Road" card: key and points from the build's config go onto the TV once, so a generic update keeps them. */
+    private static void pinRoute() {
+        SharedPreferences p = sp();
+        SharedPreferences.Editor e = p.edit();
+        if (!p.contains("routeFrom") && !Config.ROUTE_FROM.isEmpty()) e.putString("routeFrom", Config.ROUTE_FROM);
+        if (!p.contains("routeTo") && !Config.ROUTE_TO.isEmpty()) e.putString("routeTo", Config.ROUTE_TO);
+        if (!p.contains("routeName") && !Config.ROUTE_NAME.isEmpty()) e.putString("routeName", Config.ROUTE_NAME);
+        e.apply();
+    }
+
+    static String routeFrom() { return sp().getString("routeFrom", "").trim(); }
+    static String routeTo() { return sp().getString("routeTo", "").trim(); }
+    static String routeName() { return sp().getString("routeName", "").trim(); }
 
     static String city() {
         String[] z = zonePlace();
@@ -185,8 +200,8 @@ final class Prefs {
     /** Minutes of no use, with nothing playing, until the screensaver starts over an app that keeps the screen on; 0 = never. */
     static int pauseSaverMinutes() { return sp().getInt("pauseSaver", 10); }
     static void setPauseSaverMinutes(int m) { sp().edit().putInt("pauseSaver", m).apply(); version++; PauseSaver.schedule(app); }
-    static boolean saverRates() { return sp().getBoolean("saverRates", false); }
-    static void setSaverRates(boolean on) { put("saverRates", on); }
+    static boolean saverRoute() { return sp().getBoolean("saverRoute", true); }
+    static void setSaverRoute(boolean on) { put("saverRoute", on); }
     static boolean saverLink() { return sp().getBoolean("saverLink", true); }
     static void setSaverLink(boolean on) { put("saverLink", on); }
     /** 0 auto (darker by night), 1 dim, 2 medium, 3 bright. */
