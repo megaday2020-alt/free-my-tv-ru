@@ -82,11 +82,16 @@ final class NewsFeed {
             }
             if (ok) keep.add(it);
         }
-        if (threshold > 0 && keep.size() < 3) {   // a quiet day: the best-rated posts anyway, so the card is not empty
-            List<Item> rest = new ArrayList<>();
-            for (Item it : all) if (!keep.contains(it) && it.rating >= 0 && it.rating < CURATED) rest.add(it);
-            Collections.sort(rest, (a, b) -> Float.compare(b.rating, a.rating));
-            for (int i = 0; i < rest.size() && keep.size() < 3; i++) keep.add(rest.get(i));
+        if (threshold > 0) {   // every channel gets its best posts even on a quiet day, and none fills the whole card
+            final int least = Prefs.newsImportant() == 1 ? 4 : Prefs.newsImportant() == 2 ? 3 : 2;
+            for (int src = 0; src < FIRST_RSS; src++) {
+                List<Item> mine = new ArrayList<>();
+                for (Item it : all) if (it.src == src) mine.add(it);
+                Collections.sort(mine, (x, y) -> Float.compare(y.rating, x.rating));
+                for (int i = 0; i < mine.size() && i < least; i++) if (!keep.contains(mine.get(i))) keep.add(mine.get(i));
+                int seen = 0;
+                for (Item it : mine) if (keep.contains(it) && ++seen > 6) keep.remove(it);
+            }
         }
         // Best-rated first, so that of two near copies the more important one stays; then newest first.
         Collections.sort(keep, (a, b) -> Float.compare(b.rating, a.rating));

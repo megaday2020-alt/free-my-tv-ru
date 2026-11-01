@@ -168,7 +168,7 @@ final class InfoView extends FrameLayout implements HomeData.Listener {
             if (Prefs.saverRates()) small.addView(smallCard(c, "bitcoin", GREEN, Ui.ru ? "Курс ЦБ" : "Exchange rates", true), smallParams(Prefs.saverLink()));
             if (Prefs.saverLink()) small.addView(smallCard(c, "wifi", VIOLET, Ui.ru ? "Связь" : "Connection", false), smallParams(false));
             if (Prefs.saverNews()) {   // under the weather; without the news they go to the right column
-                left.addView(small, stretch(leftAny ? 24 : 0));
+                left.addView(small, cardParams(leftAny ? 24 : 0));
                 leftAny = true;
             } else {
                 right.addView(small, stretch(0));
