@@ -50,6 +50,8 @@ final class NewsFeed {
     private static final Pattern HASHTAG = Pattern.compile("[#@][\\p{L}\\p{N}_]+");
     private static final Pattern ADS = Pattern.compile("(?i)erid|реклам|на правах рекламы|промокод");
     private static final Pattern SIGNATURE = Pattern.compile("(?i)подписа|прислать новост|присылайте|ваши новости|наш чат|наш бот|предложить новост");
+    private static final Pattern MEDIA = Pattern.compile("tgme_widget_message_(?:photo_wrap|video_wrap|roundvideo|document_wrap|sticker|voice|poll)");
+    private static final Pattern SENTENCES = Pattern.compile("[.!?…]+[\"»)]?\\s+\\S");
     private static boolean busy;
 
     private static SharedPreferences sp(Context c) {
@@ -162,7 +164,7 @@ final class NewsFeed {
 
     private static List<Item> load(Context c, int src, long now) {
         List<Item> out = new ArrayList<>();
-        for (String line : sp(c).getString("e" + src, "").split("\\n")) {
+        for (String line : sp(c).getString("f" + src, "").split("\\n")) {
             String[] f = line.split("\t", 3);
             if (f.length < 3) continue;
             try {
@@ -196,13 +198,13 @@ final class NewsFeed {
             boolean any = false;
             try {
                 for (int s = 0; s < NAMES.length; s++) {
-                    if ((mask & (1 << s)) == 0 || System.currentTimeMillis() - p.getLong("ct" + s, 0) < FRESH_MS) continue;
+                    if ((mask & (1 << s)) == 0 || System.currentTimeMillis() - p.getLong("dt" + s, 0) < FRESH_MS) continue;
                     try {
                         List<String> lines = s < FIRST_RSS ? parseChannel(download(URLS[s]), System.currentTimeMillis())
                                 : parseRss(download(URLS[s]), s == 2 ? UNRATED : CURATED);
                         AppLog.w("news: " + NAMES[s] + " " + lines.size());
                         if (!lines.isEmpty()) {
-                            p.edit().putString("e" + s, String.join("\n", lines)).putLong("ct" + s, System.currentTimeMillis()).apply();
+                            p.edit().putString("f" + s, String.join("\n", lines)).putLong("dt" + s, System.currentTimeMillis()).apply();
                             any = true;
                         }
                     } catch (Exception e) {
@@ -259,6 +261,7 @@ final class NewsFeed {
             if (!t.find() || !v.find() || !d.find()) continue;
             String title = headline(t.group(1));
             if (title == null) continue;
+            if (MEDIA.matcher(post).find() && onePhrase(t.group(1))) continue;   // the point of such a post is the picture or the video
             long at;
             try {
                 at = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.ENGLISH).parse(d.group(1)).getTime();
@@ -312,6 +315,22 @@ final class NewsFeed {
 
     /** The title of a post: its first line or sentence, cleaned (no tags, links, hashtags or signatures); null for an ad or no text. */
     static String headline(String html) {
+        List<String> lines = lines(html);
+        if (lines == null || lines.isEmpty()) return null;
+        String first = lines.get(0);
+        if (first.length() < 25 && lines.size() > 1) first += " " + lines.get(1);   // a lone "Срочно!" says nothing
+        first = first.replaceAll("[\\s,;:\\-—]+$", "");
+        return first.length() < 15 || first.length() > MAX_CHARS ? null : first;
+    }
+
+    /** True when the whole text is one phrase: one line, one sentence. With a picture or a video the post is then the media itself. */
+    static boolean onePhrase(String html) {
+        List<String> lines = lines(html);
+        return lines == null || lines.size() <= 1 && !SENTENCES.matcher(lines.isEmpty() ? "" : lines.get(0)).find();
+    }
+
+    /** The lines of a post's text, cleaned (no tags, links, hashtags, signatures or pictographs); null for an ad. */
+    private static List<String> lines(String html) {
         String s = EMOJI.matcher(html).replaceAll("");
         s = BREAK.matcher(s).replaceAll("\n");
         s = unescape(TAG.matcher(s).replaceAll(""));
@@ -331,11 +350,7 @@ final class NewsFeed {
             if (line.isEmpty() || SIGNATURE.matcher(line).find()) continue;
             lines.add(line);
         }
-        if (lines.isEmpty()) return null;
-        String first = lines.get(0);
-        if (first.length() < 25 && lines.size() > 1) first += " " + lines.get(1);   // a lone "Срочно!" says nothing
-        first = first.replaceAll("[\\s,;:\\-—]+$", "");
-        return first.length() < 15 || first.length() > MAX_CHARS ? null : first;
+        return lines;
     }
 
     // MARK: - RSS
