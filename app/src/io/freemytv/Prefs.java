@@ -201,8 +201,9 @@ final class Prefs {
     static void setSaverWeather(boolean on) { put("saverWeather", on); }
     static boolean saverNews() { return sp().getBoolean("saverNews", true); }
     static void setSaverNews(boolean on) { put("saverNews", on); }
-    /** The news sources on, one bit each (the order of NewsFeed.NAMES): Topor, Ateo Breaking and RIA at first. */
-    static int newsMask() { return sp().getInt("newsMask", 7); }
+    /** The news sources on, one bit each (the order of NewsFeed.NAMES): Topor and Ateo Breaking at first. */
+    /** RIA (bit 2) is dropped for good: the owner does not want it, and its feed kept timing out. */
+    static int newsMask() { return sp().getInt("newsMask", 3) & ~4; }
     static void setNewsSource(int i, boolean on) { sp().edit().putInt("newsMask", on ? newsMask() | (1 << i) : newsMask() & ~(1 << i)).apply(); version++; }
     /** Only the important posts: 0 off, 1 more, 2 usual, 3 only the main ones. */
     static int newsImportant() { return Math.max(0, Math.min(sp().getInt("newsImportant", 0), 3)); }

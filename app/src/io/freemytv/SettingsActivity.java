@@ -655,7 +655,7 @@ public class SettingsActivity extends Activity {
                 {LANG_ROW, TEMP_ROW, THEME_ROW, ANIMATION_ROW, SOUNDS_ROW, WARM_ROW},   // look
                 {WEATHER_ROW, CITY_ROW},                                                // weather
                 {SAVER_CLOCK_ROW, SAVER_DATE_ROW, SAVER_WEATHER_ROW, SAVER_LINK_ROW, SAVER_BRIGHT_ROW, SAVER_ECO_ROW, SAVER_PAUSE_ROW},   // screensaver
-                {SAVER_NEWS_ROW, NEWS_IMPORTANT_ROW, NEWS_SRC_ROW, NEWS_SRC_ROW + 1, NEWS_SRC_ROW + 2, NEWS_SRC_ROW + 3, NEWS_SRC_ROW + 4},   // screensaver news
+                {SAVER_NEWS_ROW, NEWS_IMPORTANT_ROW, NEWS_SRC_ROW, NEWS_SRC_ROW + 1, NEWS_SRC_ROW + 3, NEWS_SRC_ROW + 4},   // screensaver news (no RIA: NEWS_SRC_ROW + 2 is not offered)
                 {SAVER_ROUTE_ROW, ROUTE_FROM_ROW, ROUTE_TO_ROW, ROUTE_NAME_ROW},        // road card
                 {VPN_GUARD_ROW, SERVER_ROW, MAINTENANCE_ROW},                           // VPN and upkeep
                 {UPDATE_ROW, REPORT_ROW, LOG_ROW}};                                     // the app itself
