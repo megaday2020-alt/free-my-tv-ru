@@ -19,7 +19,8 @@ final class Maintenance {
     private Maintenance() {}
 
     static final String ACTION = "io.freemytv.MAINTENANCE";
-    private static final long UPTIME_FOR_RESTART_S = 6 * 24 * 3600L;   // restart after ~6 days up, at the next 4:00
+    // Restart every night (up for 12 h or more): after two days up the system log daemon ate a core and the VPN tunnel went stale, video stalled.
+    private static final long UPTIME_FOR_RESTART_S = 12 * 3600L;
 
     /** Arms the alarm for the next 4:00 (or cancels it when the setting is off). */
     static void schedule(Context c) {
@@ -55,16 +56,25 @@ final class Maintenance {
         if (Prefs.warm() > 0) WarmScreen.apply(c, false);   // sunset and sunrise move a little every day
         try (Adb adb = Adb.connect(c, 5_000, null)) {
             String top = adb.shell("dumpsys activity activities | grep mResumedActivity");
-            if (!top.contains(HomeMode.PKG + "/")) {
-                AppLog.w("maintenance: skipped, something else is on the screen");
-                return;
+            // Caches only while our own screens are in front; the restart goes ahead anyway (the owner is asleep at 4:00).
+            if (top.contains(HomeMode.PKG + "/")) {
+                adb.shell("pm trim-caches 8G");
+                AppLog.w("maintenance: caches cleared");
+            } else {
+                AppLog.w("maintenance: another app is on the screen, caches left alone");
             }
-            adb.shell("pm trim-caches 8G");
-            AppLog.w("maintenance: caches cleared");
-            VpnServers.run(c, "night");   // refresh the subscriptions and pick the best VPN server (only if the picker is on)
+            // The VPN server picker no longer runs at night: V2RayTun's screens changed and it failed every time while the VPN was off for 1-2 minutes.
             Matcher m = Pattern.compile("^(\\d+)").matcher(adb.shell("cat /proc/uptime").trim());
+            if (allowRestart && Prefs.autoUpdate() && !Updater.available(c).isEmpty()) {   // a new release: install it and restart in one go
+                AppLog.w("maintenance: installing " + Updater.available(c) + " and restarting");
+                try {
+                    Updater.install(c, true);
+                } catch (Exception e) {
+                    AppLog.w("update failed: " + e.getMessage());   // then the plain restart below
+                }
+            }
             if (allowRestart && m.find() && Long.parseLong(m.group(1)) >= UPTIME_FOR_RESTART_S) {
-                AppLog.w("maintenance: restarting after a week up");
+                AppLog.w("maintenance: restarting the box");
                 adb.shell("reboot");
             }
         } catch (Exception e) {

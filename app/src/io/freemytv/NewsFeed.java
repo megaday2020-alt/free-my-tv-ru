@@ -36,7 +36,7 @@ final class NewsFeed {
     private static final int SHOWN = 18;
     /** A message that long fills three lines of the card: longer ones are not shown. */
     private static final int MAX_CHARS = 135;
-    private static final long FRESH_MS = 10 * 60_000L, MAX_AGE_MS = 24 * 3_600_000L;
+    private static final long FRESH_MS = 10 * 60_000L, MAX_AGE_MS = 24 * 3_600_000L, SHOW_AGE_MS = 6 * 3_600_000L;
     private static final Pattern ITEM = Pattern.compile("<item>(.*?)</item>", Pattern.DOTALL);
     private static final Pattern DATE = Pattern.compile("<pubDate>(.*?)</pubDate>", Pattern.DOTALL);
     private static final Pattern TITLE = Pattern.compile("<title>(?:<!\\[CDATA\\[)?(.*?)(?:\\]\\]>)?</title>", Pattern.DOTALL);
@@ -77,6 +77,11 @@ final class NewsFeed {
         boolean rated = (mask & 3) != 0;
         List<Item> all = new ArrayList<>();
         for (int s = 0; s < NAMES.length; s++) if ((mask & (1 << s)) != 0) all.addAll(load(c, s, now));
+        {   // only fresh ones (a box that was busy for hours keeps old saved lines); the old ones stay only when too few are fresh
+            List<Item> fresh = new ArrayList<>();
+            for (Item it : all) if (now - it.at <= SHOW_AGE_MS) fresh.add(it);
+            if (fresh.size() >= 5) all = fresh;
+        }
 
         List<Item> keep = new ArrayList<>();
         for (Item it : all) {

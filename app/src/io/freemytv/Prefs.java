@@ -179,7 +179,9 @@ final class Prefs {
     }
 
     /** Picks the best VPN server in V2RayTun by itself when nobody uses the box (on; turn it off in the settings). */
-    static boolean serverPick() { return sp().getBoolean("serverPick", true); }
+    /** Install a newer release at the night restart (no row in Settings yet; on by the owner's request). */
+    static boolean autoUpdate() { return sp().getBoolean("autoUpdate", true); }
+    static boolean serverPick() { return sp().getBoolean("serverPick", false); }
     static void setServerPick(boolean on) { put("serverPick", on); VpnServers.schedule(app); }
 
     /** VPN guard: brings V2RayTun's VPN back when it has been down for a while. */

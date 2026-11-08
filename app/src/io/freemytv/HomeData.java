@@ -206,17 +206,21 @@ final class HomeData {
                     } catch (Exception e) {
                         AppLog.w("yandex weather: " + e.getMessage());   // keep the other source's numbers
                     }
-                    try {   // neither source above sees local fog; Open-Meteo's model does (when it is reachable)
+                    try {   // the sky from Open-Meteo: in this area Yandex and MET say "clear" under thick cloud or fog, it does not
                         JSONObject cur = new JSONObject(get("https://api.open-meteo.com/v1/forecast?latitude=" + Prefs.latitude()
-                                + "&longitude=" + Prefs.longitude() + "&current=weather_code,visibility")).getJSONObject("current");
-                        int wc = cur.getInt("weather_code");
-                        if ((wc == 45 || wc == 48) && fresh.code < 45) {
-                            fresh.code = 45;
-                            cache.edit().putInt("yaCode", 45).apply();   // a restart reads the sky from there
-                            AppLog.w("fog check: Open-Meteo sees fog");
+                                + "&longitude=" + Prefs.longitude() + "&current=weather_code,cloud_cover")).getJSONObject("current");
+                        int wc = cur.getInt("weather_code"), cloud = cur.optInt("cloud_cover", -1);
+                        int code = wc;
+                        if (wc < 3 && cloud >= 85) code = 3;           // overcast
+                        else if (wc < 2 && cloud >= 50) code = 2;      // partly cloudy
+                        if (fresh.code >= 51 && code < 51) code = fresh.code;   // rain or snow that Yandex reports (a measurement) stays
+                        AppLog.w("sky check: Open-Meteo code " + wc + ", cloud " + cloud + "%, was " + fresh.code + ", shown " + code);
+                        if (code != fresh.code) {
+                            fresh.code = code;
+                            cache.edit().putInt("yaCode", code).apply();   // a restart reads the sky from there
                         }
                     } catch (Exception e) {
-                        AppLog.w("fog check: " + e.getMessage());
+                        AppLog.w("sky check: " + e.getMessage());   // not reachable: the sky stays as the other sources have it
                     }
                     weather = fresh;
                     weatherAt = System.currentTimeMillis();

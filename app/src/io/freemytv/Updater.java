@@ -100,6 +100,14 @@ final class Updater {
 
     /** Downloads the new APK and installs it over this app (background thread). The app restarts when it succeeds. */
     static void install(Context c) throws Exception {
+        install(c, false);
+    }
+
+    /**
+     * `thenReboot`: the night run. The install kills this app, so the whole chain (install, delete the file, restart the
+     * box) is one command line that the TV's shell finishes by itself, and the box restarts even if the install fails.
+     */
+    static void install(Context c, boolean thenReboot) throws Exception {
         String url = sp(c).getString("url", "");
         if (url.isEmpty() || available(c).isEmpty()) throw new IOException("no update");
         File dir = c.getExternalFilesDir(null);
@@ -111,6 +119,15 @@ final class Updater {
         }
         AppLog.w("update: installing " + available(c));
         sp(c).edit().putString("notify", available(c)).apply();   // the restarted app says the update is done
+        if (thenReboot) {
+            try (Adb adb = Adb.connect(c, 5_000, null)) {
+                String p = apk.getAbsolutePath();
+                adb.shell("pm install -r " + p + " > /data/local/tmp/update.log 2>&1; rm -f " + p + "; sleep 3; reboot");
+            } catch (Exception e) {
+                AppLog.w("update: " + e.getMessage());   // the connection drops when the box restarts
+            }
+            return;
+        }
         try (Adb adb = Adb.connect(c, 5_000, null)) {
             String out = adb.shell("pm install -r " + apk.getAbsolutePath());
             AppLog.w("update: " + out.trim());
