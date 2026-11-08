@@ -123,6 +123,14 @@ final class VpnGuard {
         return false;
     }
 
+    private static boolean v2rayTunOnTop(Context c) {
+        try (Adb adb = Adb.connect(c, 5_000, null)) {
+            return adb.shell("dumpsys activity activities | grep mResumedActivity").contains(V2RAYTUN + "/");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /** One check (on a background thread, from ModeJob). */
     static void checkNow(Context c) {
         Snapshot.maybe(c);
@@ -141,6 +149,11 @@ final class VpnGuard {
                 AppLog.w("vpn: back after " + (now - sp.getLong("downSince", 0)) / 1000 + " s");
             }
             sp.edit().putLong("downSince", 0).putInt("tries", 0).putBoolean("fellBack", false).apply();
+            return;
+        }
+        if (v2rayTunOnTop(c)) {   // the user works in V2RayTun by hand (a speed test stops the VPN itself): do not switch it back under their hands
+            sp.edit().putLong("downSince", 0).putInt("tries", 0).apply();
+            if (am != null) arm(am, intent(c, 80, ACTION, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE), now + 20_000);
             return;
         }
         long down = sp.getLong("downSince", 0);
